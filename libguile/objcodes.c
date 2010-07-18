@@ -33,7 +33,9 @@
 #include "programs.h"
 #include "objcodes.h"
 
-/* SCM_OBJCODE_COOKIE is defined in _scm.h */
+/* SCM_OBJCODE_COOKIE is defined in _scm.h.
+ * it goes before objcode in the on-disk representation, but not
+ * in memory. */
 /* The length of the header must be a multiple of 8 bytes.  */
 verify (((sizeof (SCM_OBJCODE_COOKIE) - 1) & 7) == 0);
 
@@ -41,6 +43,13 @@ verify (((sizeof (SCM_OBJCODE_COOKIE) - 1) & 7) == 0);
 /*
  * Objcode type
  */
+
+/* an objcode SCM object is a four-word object containing
+   - scm_tc7_objcode | the flags for this objcode
+   - the struct scm_objcode C object
+   - the parent of this objcode, if this is a slice, or #f if none
+   - the file descriptor this objcode came from if this was mmaped, or 0 if none
+*/
 
 static SCM
 make_objcode_by_mmap (int fd)
