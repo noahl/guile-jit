@@ -54,6 +54,8 @@ struct scm_objcode
 #define SCM_OBJCODE_IS_BYTEVECTOR(x) (SCM_OBJCODE_FLAGS (x) & SCM_F_OBJCODE_IS_BYTEVECTOR)
 #define SCM_OBJCODE_IS_SLICE(x) (SCM_OBJCODE_FLAGS (x) & SCM_F_OBJCODE_IS_SLICE)
 
+#define SCM_OBJCODE_JITCODE(x) (SCM_CELL_WORD ((x), 4))
+
 SCM scm_c_make_objcode_slice (SCM parent, const scm_t_uint8 *ptr);
 SCM_API SCM scm_load_objcode (SCM file);
 SCM_API SCM scm_objcode_p (SCM obj);

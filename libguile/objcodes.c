@@ -44,11 +44,13 @@ verify (((sizeof (SCM_OBJCODE_COOKIE) - 1) & 7) == 0);
  * Objcode type
  */
 
-/* an objcode SCM object is a four-word object containing
+/* an objcode SCM object is a five-word object containing
    - scm_tc7_objcode | the flags for this objcode
    - the struct scm_objcode C object
    - the parent of this objcode, if this is a slice, or #f if none
    - the file descriptor this objcode came from if this was mmaped, or 0 if none
+   - the JIT code for this object, NULL if we've never tried to JIT this,
+     and #f if we tried and failed.
 */
 
 static SCM
@@ -97,10 +99,12 @@ make_objcode_by_mmap (int fd)
 						   + data->metalen)));
     }
 
-  sret = scm_double_cell (scm_tc7_objcode | (SCM_F_OBJCODE_IS_MMAP<<8),
-                          (scm_t_bits)(addr + strlen (SCM_OBJCODE_COOKIE)),
-                          SCM_UNPACK (SCM_BOOL_F),
-                          (scm_t_bits)fd);
+  sret = scm_words (scm_tc7_objcode | (SCM_F_OBJCODE_IS_MMAP<<8), 5);
+  SCM_GC_SET_CELL_WORD (sret, 1,
+                       (scm_t_bits)(addr + strlen(SCM_OBJCODE_COOKIE)));
+  SCM_GC_SET_CELL_WORD (sret, 2, SCM_UNPACK (SCM_BOOL_F));
+  SCM_GC_SET_CELL_WORD (sret, 3, (scm_t_bits)fd);
+  SCM_GC_SET_CELL_WORD (sret, 4, (scm_t_bits)NULL);
 
   /* FIXME: we leak ourselves and the file descriptor. but then again so does
      dlopen(). */
@@ -114,6 +118,7 @@ scm_c_make_objcode_slice (SCM parent, const scm_t_uint8 *ptr)
 {
   const struct scm_objcode *data, *parent_data;
   const scm_t_uint8 *parent_base;
+  SCM ret;
 
   SCM_VALIDATE_OBJCODE (1, parent);
   parent_data = SCM_OBJCODE_DATA (parent);
@@ -137,8 +142,12 @@ scm_c_make_objcode_slice (SCM parent, const scm_t_uint8 *ptr)
   assert (SCM_C_OBJCODE_BASE (data) + data->len + data->metalen
 	  <= parent_base + parent_data->len + parent_data->metalen);
 
-  return scm_double_cell (scm_tc7_objcode | (SCM_F_OBJCODE_IS_SLICE<<8),
-                          (scm_t_bits)data, SCM_UNPACK (parent), 0);
+  ret = scm_words (scm_tc7_objcode, 5);
+  SCM_GC_SET_CELL_WORD (ret, 1, (scm_t_bits)data);
+  SCM_GC_SET_CELL_WORD (ret, 2, SCM_UNPACK (parent));
+  SCM_GC_SET_CELL_WORD (ret, 3, 0);
+  SCM_GC_SET_CELL_WORD (ret, 4, NULL);
+  return ret;
 }
 #undef FUNC_NAME
 
@@ -179,7 +188,8 @@ SCM_DEFINE (scm_bytecode_to_objcode, "bytecode->objcode", 1, 0, 0,
   size_t size;
   const scm_t_uint8 *c_bytecode;
   struct scm_objcode *data;
-
+  SCM ret;
+  
   if (!scm_is_bytevector (bytecode))
     scm_wrong_type_arg (FUNC_NAME, 1, bytecode);
 
@@ -187,17 +197,22 @@ SCM_DEFINE (scm_bytecode_to_objcode, "bytecode->objcode", 1, 0, 0,
   c_bytecode = (const scm_t_uint8*)SCM_BYTEVECTOR_CONTENTS (bytecode);
   
   SCM_ASSERT_RANGE (0, bytecode, size >= sizeof(struct scm_objcode));
+
   data = (struct scm_objcode*)c_bytecode;
 
   if (data->len + data->metalen != (size - sizeof (*data)))
     scm_misc_error (FUNC_NAME, "bad bytevector size (~a != ~a)",
 		    scm_list_2 (scm_from_size_t (size),
 				scm_from_uint32 (sizeof (*data) + data->len + data->metalen)));
-
+  
   /* foolishly, we assume that as long as bytecode is around, that c_bytecode
      will be of the same length; perhaps a bad assumption? */
-  return scm_double_cell (scm_tc7_objcode | (SCM_F_OBJCODE_IS_BYTEVECTOR<<8),
-                          (scm_t_bits)data, SCM_UNPACK (bytecode), 0);
+  ret = scm_words (scm_tc7_objcode | (SCM_F_OBJCODE_IS_BYTEVECTOR<<8), 5);
+  SCM_GC_SET_CELL_WORD (ret, 1, (scm_t_bits)data);
+  SCM_GC_SET_CELL_WORD (ret, 2, SCM_UNPACK (bytecode));
+  SCM_GC_SET_CELL_WORD (ret, 3, 0);
+  SCM_GC_SET_CELL_WORD (ret, 4, NULL);
+  return ret;
 }
 #undef FUNC_NAME
 

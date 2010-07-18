@@ -788,20 +788,22 @@ static const struct
 
 #undef CODE
 #undef META
-#undef OBJCODE_HEADER
+/* don't undef OBJCODE_HEADER because the init function will use
+ * it to verify that it's the right size. */
 #undef META_HEADER
 
 /*
- (defun generate-objcode-cells (n)
-   "Generate objcode cells for up to N arguments"
-   (interactive "p")
-   (let ((i 0))
-     (while (< i n)
-       (insert
-        (format "    { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + %d) },\n"
-                (* (+ 4 4 8 4 4 32) i)))
-       (insert "    { SCM_BOOL_F, SCM_PACK (0) },\n")
-       (setq i (1+ i)))))
+(defun generate-objcode-cells (n)
+  "Generate objcode cells for up to N arguments"
+  (interactive "p")
+  (let ((i 0))
+    (while (< i n)
+      (insert
+       (format "    { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + %d) },\n"
+               (* (+ 4 4 8 4 4 32) i)))
+      (insert "    { SCM_BOOL_F, SCM_PACK (0) },\n")
+      (insert "    { NULL, 0 },\n")
+      (setq i (1+ i)))))
 */
 #define STATIC_OBJCODE_TAG                                      \
   SCM_PACK (scm_tc7_objcode | (SCM_F_OBJCODE_IS_STATIC << 8))
@@ -809,45 +811,55 @@ static const struct
 static const struct
 {
   scm_t_uint64 dummy; /* alignment */
-  scm_t_cell cells[10 * 2]; /* 10 double cells */
+  scm_t_cell cells[10 * 3]; /* 10 six-word cells (last word unused) */
 } objcode_cells = {
   0,
   /* C-u 1 0 M-x generate-objcode-cells RET */
-  {
+  { 
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 0) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 56) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 112) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 168) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 224) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 280) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 336) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 392) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 448) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 504) },
-    { SCM_BOOL_F, SCM_PACK (0) }
+    { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
   }
 };
 
 static const SCM objcode_trampolines[10] = {
   SCM_PACK (objcode_cells.cells+0),
-  SCM_PACK (objcode_cells.cells+2),
-  SCM_PACK (objcode_cells.cells+4),
+  SCM_PACK (objcode_cells.cells+3),
   SCM_PACK (objcode_cells.cells+6),
-  SCM_PACK (objcode_cells.cells+8),
-  SCM_PACK (objcode_cells.cells+10),
+  SCM_PACK (objcode_cells.cells+9),
   SCM_PACK (objcode_cells.cells+12),
-  SCM_PACK (objcode_cells.cells+14),
-  SCM_PACK (objcode_cells.cells+16),
+  SCM_PACK (objcode_cells.cells+15),
   SCM_PACK (objcode_cells.cells+18),
+  SCM_PACK (objcode_cells.cells+21),
+  SCM_PACK (objcode_cells.cells+24),
+  SCM_PACK (objcode_cells.cells+27),
 };
 
 static SCM

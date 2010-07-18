@@ -105,7 +105,8 @@ static const type sym##__unaligned[]
   SCM_DECLARE_STATIC_ALIGNED_ARRAY (scm_t_uint8, sym##__bytecode);      \
   SCM_STATIC_ALIGNED_ARRAY (8, scm_t_cell, sym##__cells) = {            \
     { STATIC_OBJCODE_TAG, SCM_PACK (sym##__bytecode) },                 \
-    { SCM_BOOL_F, SCM_PACK (0) }                                        \
+    { SCM_BOOL_F, SCM_PACK (0) },                                       \
+    { NULL }                                                            \
   };                                                                    \
   static const SCM sym = SCM_PACK (sym##__cells);                       \
   SCM_STATIC_ALIGNED_ARRAY (8, scm_t_uint8, sym##__bytecode)

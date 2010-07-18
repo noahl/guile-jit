@@ -261,7 +261,7 @@ static const struct
 static const struct
 {
   scm_t_uint64 dummy; /* alignment */
-  scm_t_cell cells[16 * 2]; /* 4*4 double cells */
+  scm_t_cell cells[16 * 3]; /* 4*4 triple cells (last cell unused) */
 } objcode_cells = {
   0,
   /* C-u 3 M-x generate-objcode-cells RET */
@@ -269,45 +269,62 @@ static const struct
     /* 0 arguments */
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 0) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
+
 
     /* 1 arguments */
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 64) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 128) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
 
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 192) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
 
     /* 2 arguments */
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 256) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 320) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 384) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
 
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 448) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 512) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
 
     /* 3 arguments */
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 576) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 640) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 704) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 768) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
 
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 832) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 896) },
     { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
     { STATIC_OBJCODE_TAG, SCM_PACK (raw_bytecode.bytes + 960) },
-    { SCM_BOOL_F, SCM_PACK (0) }
+    { SCM_BOOL_F, SCM_PACK (0) },
+    { NULL, 0 },
   }
 };
   
@@ -317,25 +334,25 @@ static const SCM scm_smob_objcode_trampolines[16] = {
   SCM_PACK (objcode_cells.cells+0),
 
   /* 1 arguments */
-  SCM_PACK (objcode_cells.cells+2),
-  SCM_PACK (objcode_cells.cells+4),
+  SCM_PACK (objcode_cells.cells+3),
   SCM_PACK (objcode_cells.cells+6),
+  SCM_PACK (objcode_cells.cells+9),
 
   /* 2 arguments */
-  SCM_PACK (objcode_cells.cells+8),
-  SCM_PACK (objcode_cells.cells+10),
   SCM_PACK (objcode_cells.cells+12),
-  SCM_PACK (objcode_cells.cells+14),
-  SCM_PACK (objcode_cells.cells+16),
+  SCM_PACK (objcode_cells.cells+15),
+  SCM_PACK (objcode_cells.cells+18),
+  SCM_PACK (objcode_cells.cells+21),
+  SCM_PACK (objcode_cells.cells+24),
 
   /* 3 arguments */
-  SCM_PACK (objcode_cells.cells+18),
-  SCM_PACK (objcode_cells.cells+20),
-  SCM_PACK (objcode_cells.cells+22),
-  SCM_PACK (objcode_cells.cells+24),
-  SCM_PACK (objcode_cells.cells+26),
-  SCM_PACK (objcode_cells.cells+28),
-  SCM_PACK (objcode_cells.cells+30)
+  SCM_PACK (objcode_cells.cells+27),
+  SCM_PACK (objcode_cells.cells+30),
+  SCM_PACK (objcode_cells.cells+33),
+  SCM_PACK (objcode_cells.cells+36),
+  SCM_PACK (objcode_cells.cells+39),
+  SCM_PACK (objcode_cells.cells+42),
+  SCM_PACK (objcode_cells.cells+45),
 };
 
 /* (nargs * nargs) + nopt + rest * (nargs + 1) */
