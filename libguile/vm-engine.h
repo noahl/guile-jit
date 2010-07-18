@@ -90,6 +90,8 @@
 #define FP_REG
 #endif
 
+#include "vm-jit.h"
+
 
 /*
  * Cache/Sync

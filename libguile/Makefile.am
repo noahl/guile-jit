@@ -210,6 +210,7 @@ libguile_@GUILE_EFFECTIVE_VERSION@_la_SOURCES =				\
 	vectors.c				\
 	version.c				\
 	vm.c					\
+	vm-jit.c				\
 	vports.c				\
 	weaks.c
 
@@ -583,6 +584,7 @@ modinclude_HEADERS =				\
 	vectors.h				\
 	vm-engine.h				\
 	vm-expand.h				\
+	vm-jit.h				\
 	vm.h					\
 	vports.h				\
 	weaks.h

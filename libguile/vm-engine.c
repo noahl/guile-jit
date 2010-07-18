@@ -31,7 +31,7 @@
 #endif
 
 #include "vm-engine.h"
-
+#include "tags.h" /* for SCM_BOOL_F */
 
 static SCM
 VM_NAME (SCM vm, SCM program, SCM *argv, int nargs)
@@ -47,6 +47,7 @@ VM_NAME (SCM vm, SCM program, SCM *argv, int nargs)
   SCM *objects = NULL;			/* constant objects */
   size_t object_count = 0;              /* length of OBJECTS */
   SCM *stack_limit = vp->stack_limit;	/* stack limit address */
+  jitf *jitcode = NULL;  /* JIT code, if any */
 
   SCM dynstate = SCM_I_CURRENT_THREAD->dynamic_state;
   scm_t_int64 vm_cookie = vp->cookie++;
@@ -80,6 +81,10 @@ VM_NAME (SCM vm, SCM program, SCM *argv, int nargs)
   {
     SCM prog = program;
 
+    /* program could also be a smob. maybe other things? */
+    if (SCM_PROGRAM_P(program))
+      jitcode = (jitf *)SCM_OBJCODE_JITCODE(SCM_PROGRAM_OBJCODE(program));
+
     /* Boot program */
     program = vm_make_boot_program (nargs);
 
@@ -105,6 +110,21 @@ VM_NAME (SCM vm, SCM program, SCM *argv, int nargs)
 
   /* Let's go! */
   BOOT_HOOK ();
+
+  if (jitcode == NULL) {
+    jitcode = jit_objcode(bp);
+    SCM_OBJCODE_JITCODE(SCM_PROGRAM_OBJCODE(program)) = jitcode;
+  }
+  if (jitcode != SCM_BOOL_F) {
+    scm_t_uint8 *sip = ip;
+    SCM *ssp = sp;
+    SCM *sfp = fp;
+    SCM_JITCODE_ENTER(jitcode, sip, ssp, sfp);
+    ip = sip;
+    sp = ssp;
+    fp = sfp;
+  }
+  /* if the jitcode runs, we'll still want to do NEXT afterwards */
   NEXT;
 
 #ifndef HAVE_LABELS_AS_VALUES

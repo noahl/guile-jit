@@ -128,6 +128,7 @@
 #include "libguile/vectors.h"
 #include "libguile/version.h"
 #include "libguile/vm.h"
+#include "libguile/vm-jit.h"
 #include "libguile/vports.h"
 #include "libguile/weaks.h"
 #include "libguile/guardians.h"
@@ -546,7 +547,8 @@ scm_i_init_guile (SCM_STACKITEM *base)
   scm_init_weaks ();
   scm_init_guardians (); /* requires smob_prehistory */
   scm_init_vports ();
-  scm_init_standard_ports ();  /* Requires fports */
+  scm_init_jit ();
+  scm_init_standard_ports ();  /* Requires fports, jit */
   scm_init_expand ();   /* Requires structs */
   scm_init_memoize ();  /* Requires smob_prehistory */
   scm_init_eval ();     /* Requires smob_prehistory */

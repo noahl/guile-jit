@@ -744,6 +744,7 @@ VM_DEFINE_INSTRUCTION (53, new_frame, "new-frame", 0, 0, 3)
 
 VM_DEFINE_INSTRUCTION (54, call, "call", 1, -1, 1)
 {
+  (jitf *)jitcode = NULL;
   nargs = FETCH ();
 
  vm_call:
@@ -778,6 +779,22 @@ VM_DEFINE_INSTRUCTION (54, call, "call", 1, -1, 1)
   ip = SCM_C_OBJCODE_BASE (bp);
   ENTER_HOOK ();
   APPLY_HOOK ();
+
+  jitcode = SCM_OBJCODE_JITCODE(SCM_PROGRAM_OBJCODE(program));
+  if (jitcode == NULL) {
+    jitcode = jit_objcode(bp);
+    SCM_OBJCODE_JITCODE(SCM_PROGRAM_OBJCODE(program)) = jitcode;
+  }
+  if (jitcode != SCM_BOOL_F) {
+    scm_t_uint8 *sip = ip;
+    SCM *ssp = sp;
+    SCM *sfp = fp;
+    SCM_JITCODE_ENTER(jitcode, sip, ssp, sfp);
+    ip = sip;
+    sp = ssp;
+    fp = sfp;
+  }
+  /* if the jitcode runs, we'll still want to do NEXT afterwards */
   NEXT;
 }
 
