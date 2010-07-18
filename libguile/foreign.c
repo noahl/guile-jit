@@ -31,6 +31,7 @@
 #include "libguile/instructions.h"
 #include "libguile/foreign.h"
 
+#include "verify.h" /* from Gnulib, in guile/lib */
 
 
 SCM_SYMBOL (sym_void, "void");
@@ -1028,6 +1029,9 @@ scm_i_foreign_call (SCM foreign, const SCM *argv)
 static void
 scm_init_foreign (void)
 {
+  scm_t_uint8 SCM_UNUSED dummy[] = { OBJCODE_HEADER };
+  verify (sizeof (dummy) == sizeof (struct scm_objcode));
+
 #ifndef SCM_MAGIC_SNARFER
 #include "libguile/foreign.x"
 #endif

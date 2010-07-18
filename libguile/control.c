@@ -26,6 +26,7 @@
 #include "libguile/instructions.h"
 #include "libguile/vm.h"
 
+#include "verify.h" /* from Gnulib, in guile/lib */
 
 
 
@@ -271,6 +272,9 @@ scm_i_prompt_print (SCM exp, SCM port, scm_print_state *pstate SCM_UNUSED)
 void
 scm_init_control (void)
 {
+  scm_t_uint8 SCM_UNUSED dummy[] = { OBJCODE_HEADER(5,5) };
+  verify (sizeof (dummy) == sizeof (struct scm_objcode));
+
 #include "libguile/control.x"
 }
 

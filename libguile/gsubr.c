@@ -33,6 +33,8 @@
 #include "libguile/programs.h"
 
 #include "libguile/private-options.h"
+
+#include "verify.h" /* from Gnulib, in guile/lib */
 
 /*
  * gsubr.c
@@ -878,6 +880,9 @@ gsubr_21l(SCM req1, SCM req2, SCM opt, SCM rst)
 void
 scm_init_gsubr()
 {
+  scm_t_uint8 SCM_UNUSED dummy[] = { OBJCODE_HEADER };
+  verify (sizeof (dummy) == sizeof (struct scm_objcode));
+
 #ifdef GSUBR_TEST
   scm_c_define_gsubr ("gsubr-2-1-l", 2, 1, 1, gsubr_21l); /* example */
 #endif

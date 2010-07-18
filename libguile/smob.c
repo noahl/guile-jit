@@ -42,7 +42,7 @@
 #include "libguile/bdw-gc.h"
 #include <gc/gc_mark.h>
 
-
+#include "verify.h" /* from Gnulib, in guile/lib */
 
 
 /* scm_smobs scm_numsmob
@@ -250,7 +250,8 @@ static const struct
 #undef AC
 #undef BC
 #undef ABC
-#undef OBJCODE_HEADER
+/* don't undef OBJCODE_HEADER because we use it later to verify that it's
+ * the right size. */
 #undef META_HEADER
 #undef META
 
@@ -598,6 +599,9 @@ void
 scm_smob_prehistory ()
 {
   long i;
+  scm_t_uint8 SCM_UNUSED dummy[] = { OBJCODE_HEADER };
+
+  verify (sizeof (dummy) == sizeof (struct scm_objcode));
 
   smob_gc_kind = GC_new_kind (GC_new_free_list (),
 			      GC_MAKE_PROC (GC_new_proc (smob_mark), 0),

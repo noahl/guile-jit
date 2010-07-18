@@ -37,10 +37,12 @@
 #include "libguile/eval.h"
 #include "libguile/vm.h"
 #include "libguile/instructions.h"
+#include "libguile/objcodes.h"
 
 #include "libguile/validate.h"
 #include "libguile/continuations.h"
 
+#include "verify.h" /* from Gnulib, in guile/lib */
 
 
 static scm_t_bits tc16_continuation;
@@ -537,6 +539,9 @@ SCM_DEFINE (scm_with_continuation_barrier, "with-continuation-barrier", 1,0,0,
 void
 scm_init_continuations ()
 {
+  scm_t_uint8 SCM_UNUSED dummy[] = { OBJCODE_HEADER(5,5) };
+  verify (sizeof (dummy) == sizeof (struct scm_objcode));
+
   tc16_continuation = scm_make_smob_type ("continuation", 0);
   scm_set_smob_print (tc16_continuation, continuation_print);
 #include "libguile/continuations.x"
