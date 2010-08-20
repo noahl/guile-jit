@@ -67,8 +67,6 @@
 
 #include "libguile/eq.h"
 
-#include "libguile/discouraged.h"
-
 /* values per glibc, if not already defined */
 #ifndef M_LOG10E
 #define M_LOG10E   0.43429448190325182765
@@ -6285,8 +6283,6 @@ scm_i_range_error (SCM bad_val, SCM min, SCM max)
 #define SCM_FROM_TYPE_PROTO(arg) scm_from_wchar (arg)
 #include "libguile/conv-integer.i.c"
 
-#if SCM_HAVE_T_INT64
-
 #define TYPE                     scm_t_int64
 #define TYPE_MIN                 SCM_T_INT64_MIN
 #define TYPE_MAX                 SCM_T_INT64_MAX
@@ -6302,8 +6298,6 @@ scm_i_range_error (SCM bad_val, SCM min, SCM max)
 #define SCM_TO_TYPE_PROTO(arg)   scm_to_uint64 (arg)
 #define SCM_FROM_TYPE_PROTO(arg) scm_from_uint64 (arg)
 #include "libguile/conv-uinteger.i.c"
-
-#endif
 
 void
 scm_to_mpz (SCM val, mpz_t rop)
@@ -6357,11 +6351,14 @@ scm_from_double (double val)
   return z;
 }
 
-#if SCM_ENABLE_DISCOURAGED == 1
+#if SCM_ENABLE_DEPRECATED == 1
 
 float
 scm_num2float (SCM num, unsigned long int pos, const char *s_caller)
 {
+  scm_c_issue_deprecation_warning
+    ("`scm_num2float' is deprecated. Use scm_to_double instead.");
+
   if (SCM_BIGP (num))
     {
       float res = mpz_get_d (SCM_I_BIG_MPZ (num));
@@ -6377,6 +6374,9 @@ scm_num2float (SCM num, unsigned long int pos, const char *s_caller)
 double
 scm_num2double (SCM num, unsigned long int pos, const char *s_caller)
 {
+  scm_c_issue_deprecation_warning
+    ("`scm_num2double' is deprecated. Use scm_to_double instead.");
+
   if (SCM_BIGP (num))
     {
       double res = mpz_get_d (SCM_I_BIG_MPZ (num));

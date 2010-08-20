@@ -288,7 +288,7 @@ available through both Scheme and C interfaces.
 
 @menu
 * API Overview::                Overview of the Guile API.
-* Discouraged and Deprecated::  Obsolete back-compatible APIs.
+* Deprecation::                 Obsolete back-compatible APIs.
 * The SCM Type::                The fundamental data type for C code.
 * Initialization::              Initializing Guile.
 * Snarfing Macros::             Macros for snarfing initialization actions.
@@ -304,7 +304,6 @@ available through both Scheme and C interfaces.
 * LALR(1) Parsing::             Generating LALR(1) parsers.		
 * Read/Load/Eval/Compile::      Reading and evaluating Scheme code.
 * Memory Management::           Memory management and garbage collection.
-* Objects::                     Low level object orientation support.
 * Modules::                     Designing reusable code libraries.
 * Foreign Function Interface::  Interacting with C procedures and data.
 * Scheduling::                  Threads, mutexes, asyncs and dynamic roots.
@@ -316,7 +315,7 @@ available through both Scheme and C interfaces.
 @end menu
 
 @include api-overview.texi
-@include api-discdepr.texi
+@include api-deprecated.texi
 @include api-scm.texi
 @include api-init.texi
 @include api-snarf.texi
@@ -352,7 +351,6 @@ available through both Scheme and C interfaces.
 * SRFI Support::                Support for various SRFIs.
 * R6RS Support::                Modules defined by the R6RS.
 * Readline Support::            Module for using the readline library.
-* Value History::               Maintaining a value history in the REPL.
 * Pretty Printing::             Nicely formatting Scheme objects for output.
 * Formatted Output::            The @code{format} procedure.
 * File Tree Walk::              Traversing the file system.

@@ -80,6 +80,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/r6rs-arithmetic-bitwise.test	\
 	    tests/r6rs-arithmetic-fixnums.test	\
 	    tests/r6rs-arithmetic-flonums.test	\
+	    tests/r6rs-base.test		\
 	    tests/r6rs-conditions.test		\
 	    tests/r6rs-control.test		\
 	    tests/r6rs-enums.test		\
@@ -87,6 +88,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/r6rs-exceptions.test		\
 	    tests/r6rs-files.test		\
 	    tests/r6rs-hashtables.test		\
+	    tests/r6rs-lists.test		\
 	    tests/r6rs-ports.test		\
 	    tests/r6rs-records-inspection.test	\
 	    tests/r6rs-records-procedural.test	\

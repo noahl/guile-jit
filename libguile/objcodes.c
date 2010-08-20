@@ -33,10 +33,10 @@
 #include "programs.h"
 #include "objcodes.h"
 
-/* SCM_OBJCODE_COOKIE is defined in _scm.h.
- * it goes before objcode in the on-disk representation, but not
- * in memory. */
-/* The length of the header must be a multiple of 8 bytes.  */
+/* SCM_OBJCODE_COOKIE, defined in _scm.h, is a magic value prepended
+   to objcode on disk but not in memory.
+
+   The length of the header must be a multiple of 8 bytes.  */
 verify (((sizeof (SCM_OBJCODE_COOKIE) - 1) & 7) == 0);
 
 

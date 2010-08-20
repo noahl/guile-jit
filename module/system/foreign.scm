@@ -18,6 +18,7 @@
 
 (define-module (system foreign)
   #:use-module (rnrs bytevectors)
+  #:use-module (srfi srfi-1)
   #:export (void
             float double
             int unsigned-int long unsigned-long size_t
@@ -25,18 +26,42 @@
             uint16 int16
             uint32 int32
             uint64 int64
-            %null-pointer
 
             sizeof alignof
 
-            foreign-ref foreign-set!
-            foreign->bytevector bytevector->foreign
-            foreign-set-finalizer!
+            %null-pointer
+            null-pointer?
+            make-pointer
+            pointer-address
+
+            pointer->bytevector
+            bytevector->pointer
+            set-pointer-finalizer!
+
+            dereference-pointer
+            string->pointer
+            pointer->string
+
             make-foreign-function
             make-c-struct parse-c-struct))
 
 (load-extension (string-append "libguile-" (effective-version))
                 "scm_init_foreign")
+
+
+;;;
+;;; Pointers.
+;;;
+
+(define (null-pointer? pointer)
+  "Return true if POINTER is the null pointer."
+  (= (pointer-address pointer) 0))
+
+
+
+;;;
+;;; Structures.
+;;;
 
 (define *writers*
   `((,float . ,bytevector-ieee-single-native-set!)
@@ -100,7 +125,11 @@
 (define (make-c-struct types vals)
   (let ((bv (make-bytevector (sizeof types) 0)))
     (write-c-struct bv 0 types vals)
-    (bytevector->foreign bv)))
+    (bytevector->pointer bv)))
 
 (define (parse-c-struct foreign types)
-  (read-c-struct (foreign->bytevector foreign) 0 types))
+  (let ((size (fold (lambda (type total)
+                      (+ (sizeof type) total))
+                    0
+                    types)))
+    (read-c-struct (pointer->bytevector foreign size) 0 types)))

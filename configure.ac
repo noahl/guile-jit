@@ -30,7 +30,7 @@ AC_PREREQ(2.61)
 AC_INIT([GNU Guile],
         m4_esyscmd([build-aux/git-version-gen					\
           .tarball-version							\
-          's/^release_\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)/v\1.\2\.\3/g']),
+          's/^release_\([0-9][0-9]*\)-\([0-9][0-9]*\)-\([0-9][0-9]*\)/v\1.\2\.\3/g']),
         [bug-guile@gnu.org])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -129,15 +129,6 @@ AC_ARG_ENABLE(networking,
 AC_ARG_ENABLE(regex,
   [  --disable-regex         omit regular expression interfaces],,
   enable_regex=yes)
-
-AC_ARG_ENABLE([discouraged],
-  AS_HELP_STRING([--disable-discouraged],[omit discouraged features]))
-
-if test "$enable_discouraged" = no; then
-  SCM_I_GSC_ENABLE_DISCOURAGED=0
-else
-  SCM_I_GSC_ENABLE_DISCOURAGED=1
-fi
 
 AC_ARG_ENABLE([deprecated],
   AS_HELP_STRING([--disable-deprecated],[omit deprecated features]))
@@ -1613,7 +1604,6 @@ AC_SUBST([sitedir])
 
 # Additional SCM_I_GSC definitions are above.
 AC_SUBST([SCM_I_GSC_GUILE_DEBUG])
-AC_SUBST([SCM_I_GSC_ENABLE_DISCOURAGED])
 AC_SUBST([SCM_I_GSC_ENABLE_DEPRECATED])
 AC_SUBST([SCM_I_GSC_STACK_GROWS_UP])
 AC_SUBST([SCM_I_GSC_C_INLINE])
@@ -1630,6 +1620,7 @@ AC_CONFIG_FILES([
   emacs/Makefile
   examples/Makefile
   libguile/Makefile
+  libguile/version.h
   srfi/Makefile
   guile-readline/Makefile
   test-suite/Makefile
@@ -1643,11 +1634,6 @@ AC_CONFIG_FILES([meta/guile-2.0.pc])
 AC_CONFIG_FILES([meta/guile-2.0-uninstalled.pc])
 AC_CONFIG_FILES([doc/ref/effective-version.texi])
 
-dnl We can get fancy with m4sugar (m4_foreach et al) later.
-dnl NB: We don't jam everything into one GUILE_CONFIG_SCRIPT call
-dnl since that expands "chmod +x LONG-LIST-OF-FILES" multiply.  --ttn
-AC_DEFUN([GUILE_CONFIG_SCRIPT],[AC_CONFIG_FILES([$1],[chmod +x $1])])
-
 GUILE_CONFIG_SCRIPT([check-guile])
 GUILE_CONFIG_SCRIPT([benchmark-guile])
 GUILE_CONFIG_SCRIPT([meta/guile])
@@ -1655,8 +1641,6 @@ GUILE_CONFIG_SCRIPT([meta/uninstalled-env])
 GUILE_CONFIG_SCRIPT([meta/gdb-uninstalled-guile])
 GUILE_CONFIG_SCRIPT([meta/guile-tools])
 GUILE_CONFIG_SCRIPT([libguile/guile-snarf])
-GUILE_CONFIG_SCRIPT([libguile/guile-doc-snarf])
-GUILE_CONFIG_SCRIPT([libguile/guile-func-name-check])
 GUILE_CONFIG_SCRIPT([libguile/guile-snarf-docs])
 GUILE_CONFIG_SCRIPT([test-suite/standalone/test-use-srfi])
 GUILE_CONFIG_SCRIPT([test-suite/standalone/test-fast-slot-ref])

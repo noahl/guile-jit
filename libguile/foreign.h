@@ -21,25 +21,18 @@
 
 #include "libguile/__scm.h"
 
-/* A foreign value is some value that exists outside of Guile. It is represented
-   by a cell whose second word is a pointer. The first word has the
-   scm_tc7_foreign typecode and type of the aliased (pointed-to) value in its
-   lower 16 bits.
-
-   There are numeric types, like uint32 and float, and there is a "generic
-   pointer" type, void. Void pointers also have a length associated with them,
-   in the high bits of the first word of the SCM object, but since they really
-   are pointers out into the wild wooly world of C, perhaps we don't actually
-   know how much memory they take up. In that, most general case, the "len"
-   will be stored as 0.
+/* A "foreign pointer" is a wrapped C pointer.  It is represented by a
+   cell whose second word is a pointer.  The first word has the
+   `scm_tc7_pointer' type code and a bit saying whether it has an
+   associated finalizer or not.
 
    The basic idea is that we can help the programmer to avoid cutting herself,
-   but we won't take away her knives.
-*/
-typedef enum
+   but we won't take away her knives.  */
+
+enum scm_t_foreign_type
   {
-    SCM_FOREIGN_TYPE_VOID, /* a pointer out into the wilderness */
-    SCM_FOREIGN_TYPE_FLOAT,    
+    SCM_FOREIGN_TYPE_VOID,
+    SCM_FOREIGN_TYPE_FLOAT,
     SCM_FOREIGN_TYPE_DOUBLE,
     SCM_FOREIGN_TYPE_UINT8,
     SCM_FOREIGN_TYPE_INT8,
@@ -50,57 +43,38 @@ typedef enum
     SCM_FOREIGN_TYPE_UINT64,
     SCM_FOREIGN_TYPE_INT64,
     SCM_FOREIGN_TYPE_LAST = SCM_FOREIGN_TYPE_INT64
-  } scm_t_foreign_type;
+  };
 
+typedef enum scm_t_foreign_type scm_t_foreign_type;
 
-typedef void (*scm_t_foreign_finalizer) (void *);
+typedef void (*scm_t_pointer_finalizer) (void *);
 
-#define SCM_FOREIGN_P(x)                                                \
-  (!SCM_IMP (x) && SCM_TYP7(x) == scm_tc7_foreign)
-#define SCM_VALIDATE_FOREIGN(pos, x)					\
-  SCM_MAKE_VALIDATE (pos, x, FOREIGN_P)
-#define SCM_FOREIGN_TYPE(x)                                             \
-  ((scm_t_foreign_type)((SCM_CELL_WORD_0 (x) >> 8)&0xff))
-#define SCM_FOREIGN_POINTER(x, ctype)                                   \
-  ((ctype*)SCM_CELL_WORD_1 (x))
-#define SCM_FOREIGN_VALUE_REF(x, ctype)                                 \
-  (*SCM_FOREIGN_POINTER (x, ctype))
-#define SCM_FOREIGN_VALUE_SET(x, ctype, val)                            \
-  (*SCM_FOREIGN_POINTER (x, ctype) = (val))
-#define SCM_FOREIGN_HAS_FINALIZER(x)                            \
+#define SCM_POINTER_P(x)                                                \
+  (!SCM_IMP (x) && SCM_TYP7(x) == scm_tc7_pointer)
+#define SCM_VALIDATE_POINTER(pos, x)		\
+  SCM_MAKE_VALIDATE (pos, x, POINTER_P)
+#define SCM_POINTER_VALUE(x)			\
+  ((void *) SCM_CELL_WORD_1 (x))
+#define SCM_POINTER_HAS_FINALIZER(x)		\
   ((SCM_CELL_WORD_0 (x) >> 16) & 0x1)
-#define SCM_FOREIGN_LEN(x)                                              \
-  ((size_t)(SCM_CELL_WORD_0 (x) >> 17))
 
-#define SCM_FOREIGN_TYPED_P(x, type)					\
-  (SCM_FOREIGN_P (x) && SCM_FOREIGN_TYPE (x) == SCM_FOREIGN_TYPE_##type)
-#define SCM_VALIDATE_FOREIGN_TYPED(pos, x, type)                        \
-  do {                                                                  \
-    SCM_ASSERT_TYPE (SCM_FOREIGN_TYPED_P (x, type), x, pos, FUNC_NAME,  \
-                     "FOREIGN_"#type"_P");                              \
-  } while (0)
-
-#define SCM_FOREIGN_VALUE_P(x)                                          \
-  (SCM_FOREIGN_P (x) && SCM_FOREIGN_TYPE (x) != SCM_FOREIGN_TYPE_VOID)
-#define SCM_VALIDATE_FOREIGN_VALUE(pos, x)				\
-  SCM_MAKE_VALIDATE (pos, x, FOREIGN_VALUE_P)
-
-SCM_API SCM scm_take_foreign_pointer (scm_t_foreign_type type, void *ptr,
-                                      size_t len,
-                                      scm_t_foreign_finalizer finalizer);
+SCM_API SCM scm_from_pointer (void *, scm_t_pointer_finalizer);
 
 SCM_API SCM scm_alignof (SCM type);
 SCM_API SCM scm_sizeof (SCM type);
-SCM_API SCM scm_foreign_type (SCM foreign);
-SCM_API SCM scm_foreign_ref (SCM foreign);
-SCM_API SCM scm_foreign_set_x (SCM foreign, SCM val);
-SCM_API SCM scm_foreign_to_bytevector (SCM foreign, SCM type,
+SCM_API SCM scm_pointer_address (SCM pointer);
+SCM_API SCM scm_pointer_to_bytevector (SCM pointer, SCM type,
                                        SCM offset, SCM len);
-SCM_API SCM scm_foreign_set_finalizer_x (SCM foreign, SCM finalizer);
-SCM_API SCM scm_bytevector_to_foreign (SCM bv, SCM offset, SCM len);
+SCM_API SCM scm_set_pointer_finalizer_x (SCM pointer, SCM finalizer);
+SCM_API SCM scm_bytevector_to_pointer (SCM bv, SCM offset);
 
-SCM_INTERNAL void scm_i_foreign_print (SCM foreign, SCM port,
+SCM_INTERNAL SCM scm_make_pointer (SCM address, SCM finalizer);
+SCM_INTERNAL void scm_i_pointer_print (SCM pointer, SCM port,
                                        scm_print_state *pstate);
+
+SCM_INTERNAL SCM scm_dereference_pointer (SCM pointer);
+SCM_INTERNAL SCM scm_string_to_pointer (SCM string);
+SCM_INTERNAL SCM scm_pointer_to_string (SCM pointer);
 
 
 

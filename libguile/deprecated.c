@@ -34,7 +34,6 @@
 #include "libguile/bytevectors.h"
 #include "libguile/bitvectors.h"
 #include "libguile/deprecated.h"
-#include "libguile/discouraged.h"
 #include "libguile/deprecation.h"
 #include "libguile/snarf.h"
 #include "libguile/validate.h"
@@ -1900,9 +1899,9 @@ SCM_DEFINE (scm_dynamic_args_call, "dynamic-args-call", 3, 0, 0,
 
   if (scm_is_string (func))
     func = scm_dynamic_func (func, dobj);
-  SCM_VALIDATE_FOREIGN_TYPED (SCM_ARG1, func, VOID);
+  SCM_VALIDATE_POINTER (SCM_ARG1, func);
 
-  fptr = SCM_FOREIGN_POINTER (func, void);
+  fptr = SCM_POINTER_VALUE (func);
 
   argv = scm_i_allocate_string_pointers (args);
   for (argc = 0; argv[argc]; argc++)
@@ -1982,6 +1981,382 @@ scm_internal_stack_catch (SCM tag,
   scm_c_issue_deprecation_warning
     ("`scm_internal_stack_catch' is deprecated. Talk to guile-devel if you see this message.");
   return scm_internal_catch (tag, cwss_body, &d, handler, handler_data);
+}
+
+
+
+SCM
+scm_short2num (short x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_short2num' is deprecated. Use scm_from_short instead.");
+  return scm_from_short (x);
+}
+
+SCM
+scm_ushort2num (unsigned short x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_ushort2num' is deprecated. Use scm_from_ushort instead.");
+  return scm_from_ushort (x);
+}
+
+SCM
+scm_int2num (int x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_int2num' is deprecated. Use scm_from_int instead.");
+  return scm_from_int (x);
+}
+
+SCM
+scm_uint2num (unsigned int x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_uint2num' is deprecated. Use scm_from_uint instead.");
+  return scm_from_uint (x);
+}
+
+SCM
+scm_long2num (long x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_long2num' is deprecated. Use scm_from_long instead.");
+  return scm_from_long (x);
+}
+
+SCM
+scm_ulong2num (unsigned long x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_ulong2num' is deprecated. Use scm_from_ulong instead.");
+  return scm_from_ulong (x);
+}
+
+SCM
+scm_size2num (size_t x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_size2num' is deprecated. Use scm_from_size_t instead.");
+  return scm_from_size_t (x);
+}
+
+SCM
+scm_ptrdiff2num (ptrdiff_t x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_ptrdiff2num' is deprecated. Use scm_from_ssize_t instead.");
+  return scm_from_ssize_t (x);
+}
+
+short
+scm_num2short (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2short' is deprecated. Use scm_to_short instead.");
+  return scm_to_short (x);
+}
+
+unsigned short
+scm_num2ushort (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2ushort' is deprecated. Use scm_to_ushort instead.");
+  return scm_to_ushort (x);
+}
+
+int
+scm_num2int (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2int' is deprecated. Use scm_to_int instead.");
+  return scm_to_int (x);
+}
+
+unsigned int
+scm_num2uint (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2uint' is deprecated. Use scm_to_uint instead.");
+  return scm_to_uint (x);
+}
+
+long
+scm_num2long (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2long' is deprecated. Use scm_to_long instead.");
+  return scm_to_long (x);
+}
+
+unsigned long
+scm_num2ulong (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2ulong' is deprecated. Use scm_to_ulong instead.");
+  return scm_to_ulong (x);
+}
+
+size_t
+scm_num2size (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2size' is deprecated. Use scm_to_size_t instead.");
+  return scm_to_size_t (x);
+}
+
+ptrdiff_t
+scm_num2ptrdiff (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2ptrdiff' is deprecated. Use scm_to_ssize_t instead.");
+  return scm_to_ssize_t (x);
+}
+
+#if SCM_SIZEOF_LONG_LONG != 0
+
+SCM
+scm_long_long2num (long long x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_long_long2num' is deprecated. Use scm_from_long_long instead.");
+  return scm_from_long_long (x);
+}
+
+SCM
+scm_ulong_long2num (unsigned long long x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_ulong_long2num' is deprecated. Use scm_from_ulong_long instead.");
+  return scm_from_ulong_long (x);
+}
+
+long long
+scm_num2long_long (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2long_long' is deprecated. Use scm_to_long_long instead.");
+  return scm_to_long_long (x);
+}
+
+unsigned long long
+scm_num2ulong_long (SCM x, unsigned long pos, const char *s_caller)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2ulong_long' is deprecated. Use scm_from_ulong_long instead.");
+  return scm_to_ulong_long (x);
+}
+
+#endif
+
+SCM
+scm_make_real (double x)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_make_real' is deprecated. Use scm_from_double instead.");
+  return scm_from_double (x);
+}
+
+double
+scm_num2dbl (SCM a, const char *why)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_num2dbl' is deprecated. Use scm_to_double instead.");
+  return scm_to_double (a);
+}
+
+SCM
+scm_float2num (float n)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_float2num' is deprecated. Use scm_from_double instead.");
+  return scm_from_double ((double) n);
+}
+
+SCM
+scm_double2num (double n)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_double2num' is deprecated. Use scm_from_double instead.");
+  return scm_from_double (n);
+}
+
+SCM
+scm_make_complex (double x, double y)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_make_complex' is deprecated. Use scm_c_make_rectangular instead.");
+  return scm_c_make_rectangular (x, y);
+}
+
+SCM
+scm_mem2symbol (const char *mem, size_t len)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_mem2symbol' is deprecated. Use scm_from_locale_symboln instead.");
+  return scm_from_locale_symboln (mem, len);
+}
+
+SCM
+scm_mem2uninterned_symbol (const char *mem, size_t len)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_mem2uninterned_symbol' is deprecated. "
+     "Use scm_make_symbol and scm_from_locale_symboln instead.");
+  return scm_make_symbol (scm_from_locale_stringn (mem, len));
+}
+
+SCM
+scm_str2symbol (const char *str)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_str2symbol' is deprecated. Use scm_from_locale_symbol instead.");
+  return scm_from_locale_symbol (str);
+}
+
+
+/* This function must only be applied to memory obtained via malloc,
+   since the GC is going to apply `free' to it when the string is
+   dropped.
+
+   Also, s[len] must be `\0', since we promise that strings are
+   null-terminated.  Perhaps we could handle non-null-terminated
+   strings by claiming they're shared substrings of a string we just
+   made up.  */
+SCM
+scm_take_str (char *s, size_t len)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_take_str' is deprecated. Use scm_take_locale_stringn instead.");
+  return scm_take_locale_stringn (s, len);
+}
+
+/* `s' must be a malloc'd string.  See scm_take_str.  */
+SCM
+scm_take0str (char *s)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_take0str' is deprecated. Use scm_take_locale_string instead.");
+  return scm_take_locale_string (s);
+}
+
+SCM 
+scm_mem2string (const char *src, size_t len)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_mem2string' is deprecated. Use scm_from_locale_stringn instead.");
+  return scm_from_locale_stringn (src, len);
+}
+
+SCM
+scm_str2string (const char *src)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_str2string' is deprecated. Use scm_from_locale_string instead.");
+  return scm_from_locale_string (src);
+}
+
+SCM 
+scm_makfrom0str (const char *src)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_makfrom0str' is deprecated."
+     "Use scm_from_locale_string instead, but check for NULL first.");
+  if (!src) return SCM_BOOL_F;
+  return scm_from_locale_string (src);
+}
+
+SCM 
+scm_makfrom0str_opt (const char *src)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_makfrom0str_opt' is deprecated."
+     "Use scm_from_locale_string instead, but check for NULL first.");
+  return scm_makfrom0str (src);
+}
+
+
+SCM
+scm_allocate_string (size_t len)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_allocate_string' is deprecated. Use scm_c_make_string instead.");
+  return scm_i_make_string (len, NULL);
+}
+
+SCM_DEFINE (scm_make_keyword_from_dash_symbol, "make-keyword-from-dash-symbol", 1, 0, 0, 
+            (SCM symbol),
+            "Make a keyword object from a @var{symbol} that starts with a dash.")
+#define FUNC_NAME s_scm_make_keyword_from_dash_symbol
+{
+  SCM dash_string, non_dash_symbol;
+
+  scm_c_issue_deprecation_warning
+    ("`scm_make_keyword_from_dash_symbol' is deprecated. Don't use dash symbols.");
+
+  SCM_ASSERT (scm_is_symbol (symbol)
+	      && (scm_i_symbol_ref (symbol, 0) == '-'),
+	      symbol, SCM_ARG1, FUNC_NAME);
+
+  dash_string = scm_symbol_to_string (symbol);
+  non_dash_symbol =
+    scm_string_to_symbol (scm_c_substring (dash_string,
+					   1,
+					   scm_c_string_length (dash_string)));
+
+  return scm_symbol_to_keyword (non_dash_symbol);
+}
+#undef FUNC_NAME
+
+SCM_DEFINE (scm_keyword_dash_symbol, "keyword-dash-symbol", 1, 0, 0, 
+            (SCM keyword),
+	    "Return the dash symbol for @var{keyword}.\n"
+	    "This is the inverse of @code{make-keyword-from-dash-symbol}.")
+#define FUNC_NAME s_scm_keyword_dash_symbol
+{
+  SCM symbol = scm_keyword_to_symbol (keyword);
+  SCM parts = scm_list_2 (scm_from_locale_string ("-"),
+			  scm_symbol_to_string (symbol));
+  scm_c_issue_deprecation_warning
+    ("`scm_keyword_dash_symbol' is deprecated. Don't use dash symbols.");
+
+  return scm_string_to_symbol (scm_string_append (parts));
+}
+#undef FUNC_NAME
+
+SCM
+scm_c_make_keyword (const char *s)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_c_make_keyword' is deprecated. Use scm_from_locale_keyword instead.");
+  return scm_from_locale_keyword (s);
+}
+
+unsigned int
+scm_thread_sleep (unsigned int t)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_thread_sleep' is deprecated. Use scm_std_sleep instead.");
+  return scm_std_sleep (t);
+}
+
+unsigned long
+scm_thread_usleep (unsigned long t)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_thread_usleep' is deprecated. Use scm_std_usleep instead.");
+  return scm_std_usleep (t);
+}
+
+int scm_internal_select (int fds,
+                         SELECT_TYPE *rfds,
+                         SELECT_TYPE *wfds,
+                         SELECT_TYPE *efds,
+                         struct timeval *timeout)
+{
+  scm_c_issue_deprecation_warning
+    ("`scm_internal_select' is deprecated. Use scm_std_select instead.");
+  return scm_std_select (fds, rfds, wfds, efds, timeout);
 }
 
 

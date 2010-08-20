@@ -307,10 +307,13 @@ VM_DEFINE_INSTRUCTION (26, variable_ref, "variable-ref", 0, 1, 1)
 {
   SCM x = *sp;
 
-  if (!VARIABLE_BOUNDP (x))
+  if (SCM_UNLIKELY (!VARIABLE_BOUNDP (x)))
     {
-      finish_args = scm_list_1 (x);
-      /* Was: finish_args = SCM_LIST1 (SCM_CAR (x)); */
+      SCM var_name;
+
+      /* Attempt to provide the variable name in the error message.  */
+      var_name = scm_module_reverse_lookup (scm_current_module (), x);
+      finish_args = scm_list_1 (scm_is_true (var_name) ? var_name : x);
       goto vm_error_unbound;
     }
   else
@@ -854,12 +857,13 @@ VM_DEFINE_INSTRUCTION (55, tail_call, "tail-call", 1, -1, 1)
 
 VM_DEFINE_INSTRUCTION (56, subr_call, "subr-call", 1, -1, -1)
 {
-  SCM foreign, ret;
+  SCM pointer, ret;
   SCM (*subr)();
-  nargs = FETCH ();
-  POP (foreign);
 
-  subr = SCM_FOREIGN_POINTER (foreign, void);
+  nargs = FETCH ();
+  POP (pointer);
+
+  subr = SCM_POINTER_VALUE (pointer);
 
   VM_HANDLE_INTERRUPTS;
   SYNC_REGISTER ();
@@ -1611,7 +1615,7 @@ VM_DEFINE_INSTRUCTION (92, fluid_ref, "fluid-ref", 0, 1, 1)
   
   CHECK_UNDERFLOW ();
   fluids = SCM_I_DYNAMIC_STATE_FLUIDS (dynstate);
-  if (SCM_UNLIKELY (!SCM_I_FLUID_P (*sp))
+  if (SCM_UNLIKELY (!SCM_FLUID_P (*sp))
       || ((num = SCM_I_FLUID_NUM (*sp)) >= SCM_SIMPLE_VECTOR_LENGTH (fluids)))
     {
       /* Punt dynstate expansion and error handling to the C proc. */
@@ -1632,7 +1636,7 @@ VM_DEFINE_INSTRUCTION (93, fluid_set, "fluid-set", 0, 2, 0)
   POP (val);
   POP (fluid);
   fluids = SCM_I_DYNAMIC_STATE_FLUIDS (dynstate);
-  if (SCM_UNLIKELY (!SCM_I_FLUID_P (fluid))
+  if (SCM_UNLIKELY (!SCM_FLUID_P (fluid))
       || ((num = SCM_I_FLUID_NUM (fluid)) >= SCM_SIMPLE_VECTOR_LENGTH (fluids)))
     {
       /* Punt dynstate expansion and error handling to the C proc. */

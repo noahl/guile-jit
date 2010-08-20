@@ -21,7 +21,7 @@
   (export boolean? symbol? char? vector? null? pair? number? string? procedure?
 	 
 	  define define-syntax syntax-rules lambda let let* let-values 
-	  let*-values letrec begin 
+	  let*-values letrec letrec* begin 
 
 	  quote lambda if set! cond case 
 	 
@@ -72,9 +72,12 @@
 
 	  syntax-rules identifier-syntax)
  (import (rename (guile) (quotient div) (modulo mod))
-	 (rename (only (guile) for-each map)
-		 (for-each vector-for-each) (map vector-map))
 	 (srfi srfi-11))
+
+ (define (vector-for-each proc . vecs)
+   (apply for-each (cons proc (map vector->list vecs))))
+ (define (vector-map proc . vecs)
+   (list->vector (apply map (cons proc (map vector->list vecs)))))
 
  (define (div-and-mod x y) (let ((q (div x y)) (r (mod x y))) (values q r)))
 
