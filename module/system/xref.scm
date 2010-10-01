@@ -23,7 +23,13 @@
   #:use-module (srfi srfi-1)
   #:export (*xref-ignored-modules*
             procedure-callees
-            procedure-callers))
+            procedure-callers
+            source-closures
+            source-procedures))
+
+;;;
+;;; The cross-reference database: who calls whom.
+;;;
 
 (define (program-callee-rev-vars prog)
   (define (cons-uniq x y)
@@ -134,7 +140,7 @@
 (define (ensure-callers-db mod-name)
   (let ((mod (and mod-name (resolve-module mod-name)))
         (visited #f))
-    (define (visit-variable var recurse mod-name)
+    (define (visit-variable var mod-name)
       (if (variable-bound? var)
           (let ((x (variable-ref var)))
             (cond
@@ -146,24 +152,31 @@
                 (for-each (lambda (callee)
                             (add-caller callee x mod-name))
                           callees)
-                (add-callees callees mod-name)))
-             ((and recurse (module? x))
-              (visit-module x #t))))))
+                (add-callees callees mod-name)))))))
 
-    (define (visit-module mod recurse)
+    (define (visit-module mod)
       (if visited (hashq-set! visited mod #t))
       (if (not (memq on-module-modified (module-observers mod)))
           (module-observe mod on-module-modified))
       (let ((name (module-name mod)))
         (module-for-each (lambda (sym var)
-                           (visit-variable var recurse name))
+                           (visit-variable var name))
                          mod)))
+
+    (define (visit-submodules mod)
+      (hash-for-each
+       (lambda (name sub)
+         (if (not (and visited (hashq-ref visited sub)))
+             (begin
+               (visit-module sub)
+               (visit-submodules sub))))
+       (module-submodules mod)))
 
     (cond ((and (not mod-name) (not *callers-db*))
            (set! *callers-db* (make-hash-table 1000))
            (set! visited (make-hash-table 1000))
-           (visit-module the-root-module #t))
-          (mod-name (visit-module mod #f)))))
+           (visit-submodules (resolve-module '() #f)))
+          (mod-name (visit-module mod)))))
 
 (define (procedure-callers var)
   "Returns an association list, keyed by module name, of known callers
@@ -180,3 +193,188 @@ pair of the form (module-name . variable-name), "
                      (error "expected a variable, symbol, or (modname . sym)" var)))))))
     (untaint-modules)
     (hashq-ref *callers-db* v '())))
+
+
+
+;;;
+;;; The source database: procedures defined at a given source location.
+;;;
+
+;; FIXME: refactor to share code with the xref database.
+
+;; ((ip file line . col) ...)
+(define (procedure-sources proc)
+  (cond
+   ((program? proc) (program-sources proc))
+   (else '())))
+
+;; file -> line -> (proc ...)
+(define *closure-sources-db* #f)
+;; file -> line -> (proc ...)
+(define *sources-db* #f)
+;; module-name -> proc -> sources
+(define *module-sources-db* (make-hash-table))
+;; (module-name ...)
+(define *tainted-sources* '())
+
+(define (on-source-modified m)
+  (let ((name (module-name m)))
+    (if (and (not (member name *xref-ignored-modules*))
+             (not (member name *tainted-sources*))
+             (pair? name))
+        (set! *tainted-sources* (cons name *tainted-sources*)))))
+
+(define (add-source proc file line db)
+  (let ((file-table (or (hash-ref db file)
+                        (let ((table (make-hash-table)))
+                          (hash-set! db file table)
+                          table))))
+    (hashv-set! file-table
+                line
+                (cons proc (hashv-ref file-table line '())))))
+
+(define (forget-source proc file line db)
+  (let ((file-table (hash-ref db file)))
+    (if file-table
+        (let ((procs (delq proc (hashv-ref file-table line '()))))
+          (if (pair? procs)
+              (hashv-set! file-table line procs)
+              (hashv-remove! file-table line))))))
+
+(define (add-sources proc mod-name db)
+  (let ((sources (procedure-sources proc)))
+    (if (pair? sources)
+        (begin
+          ;; Add proc to *module-sources-db*, for book-keeping.
+          (hashq-set! (or (hash-ref *module-sources-db* mod-name)
+                          (let ((table (make-hash-table)))
+                            (hash-set! *module-sources-db* mod-name table)
+                            table))
+                      proc
+                      sources)
+          ;; Actually add the source entries.
+          (for-each (lambda (source)
+                      (pmatch source
+                        ((,ip ,file ,line . ,col)
+                         (add-source proc file line db))
+                        (else (error "unexpected source format" source))))
+                    sources)))
+    ;; Add source entries for nested procedures.
+    (for-each (lambda (obj)
+                (if (procedure? obj)
+                    (add-sources obj mod-name *closure-sources-db*)))
+              (or (and (program? proc)
+                       (and=> (program-objects proc) vector->list))
+                  '()))))
+
+(define (forget-sources proc mod-name db)
+  (let ((mod-table (hash-ref *module-sources-db* mod-name)))
+    (if mod-table
+        (begin
+          ;; Forget source entries.
+          (for-each (lambda (source)
+                      (pmatch source
+                        ((,ip ,file ,line . ,col)
+                         (forget-source proc file line db))
+                        (else (error "unexpected source format" source))))
+                    (hashq-ref mod-table proc '()))
+          ;; Forget the proc.
+          (hashq-remove! mod-table proc)
+          ;; Forget source entries for nested procedures.
+          (for-each (lambda (obj)
+                (if (procedure? obj)
+                    (forget-sources obj mod-name *closure-sources-db*)))
+              (or (and (program? proc)
+                       (and=> (program-objects proc) vector->list))
+                  '()))))))
+
+(define (untaint-sources)
+  (define (untaint m)
+    (for-each (lambda (proc) (forget-sources proc m *sources-db*))
+              (cond
+               ((hash-ref *module-sources-db* m)
+                => (lambda (table)
+                     (hash-for-each (lambda (proc sources) proc) table)))
+               (else '())))
+    (ensure-sources-db m))
+  (ensure-sources-db #f)
+  (for-each untaint *tainted-sources*)
+  (set! *tainted-sources* '()))
+
+(define (ensure-sources-db mod-name)
+  (define (visit-module mod)
+    (if (not (memq on-source-modified (module-observers mod)))
+        (module-observe mod on-source-modified))
+    (let ((name (module-name mod)))
+      (module-for-each
+       (lambda (sym var)
+         (if (variable-bound? var)
+             (let ((x (variable-ref var)))
+               (if (procedure? x)
+                   (add-sources x name *sources-db*)))))
+       mod)))
+
+  (define visit-submodules
+    (let ((visited #f))
+      (lambda (mod)
+        (if (not visited)
+            (set! visited (make-hash-table)))
+        (hash-for-each
+         (lambda (name sub)
+           (if (not (hashq-ref visited sub))
+               (begin
+                 (hashq-set! visited sub #t)
+                 (visit-module sub)
+                 (visit-submodules sub))))
+         (module-submodules mod)))))
+
+  (cond ((and (not mod-name) (not *sources-db*) (not *closure-sources-db*))
+         (set! *closure-sources-db* (make-hash-table 1000))
+         (set! *sources-db* (make-hash-table 1000))
+         (visit-submodules (resolve-module '() #f)))
+        (mod-name (visit-module (resolve-module mod-name)))))
+
+(define (lines->ranges file-table)
+  (let ((ranges (make-hash-table)))
+    (hash-for-each
+     (lambda (line procs)
+       (for-each
+        (lambda (proc)
+          (cond
+           ((hashq-ref ranges proc)
+            => (lambda (pair)
+                 (if (< line (car pair))
+                     (set-car! pair line))
+                 (if (> line (cdr pair))
+                     (set-cdr! pair line))))
+           (else
+            (hashq-set! ranges proc (cons line line)))))
+        procs))
+     file-table)
+    (sort! (hash-map->list cons ranges)
+           (lambda (x y) (< (cadr x) (cadr y))))))
+
+(define* (lookup-source-procedures canon-file line db)
+  (let ((file-table (hash-ref db canon-file)))
+    (let lp ((ranges (if file-table (lines->ranges file-table) '()))
+             (procs '()))
+      (cond
+       ((null? ranges) (reverse procs))
+       ((<= (cadar ranges) line (cddar ranges))
+        (lp (cdr ranges) (cons (caar ranges) procs)))
+       (else
+        (lp (cdr ranges) procs))))))
+
+(define* (source-closures file line #:key (canonicalization 'relative))
+  (ensure-sources-db #f)
+  (let* ((port (with-fluids ((%file-port-name-canonicalization canonicalization))
+                 (false-if-exception (open-input-file file))))
+         (file (if port (port-filename port) file)))
+    (lookup-source-procedures file line *closure-sources-db*)))
+
+(define* (source-procedures file line #:key (canonicalization 'relative))
+  (ensure-sources-db #f)
+  (let* ((port (with-fluids ((%file-port-name-canonicalization canonicalization))
+                 (false-if-exception (open-input-file file))))
+         (file (if port (port-filename port) file)))
+    (lookup-source-procedures file line *sources-db*)))

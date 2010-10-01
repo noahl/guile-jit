@@ -24,6 +24,7 @@
   #:use-module (system foreign)
   #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-1)
+  #:use-module (srfi srfi-26)
   #:use-module (test-suite lib))
 
 
@@ -46,7 +47,18 @@
 (with-test-prefix "make-pointer"
 
   (pass-if "address preserved"
-    (= 123 (pointer-address (make-pointer 123)))))
+    (= 123 (pointer-address (make-pointer 123))))
+
+  (pass-if "equal?"
+    (equal? (make-pointer 123) (make-pointer 123)))
+
+  (pass-if "equal? modulo finalizer"
+    (let ((finalizer (dynamic-func "scm_is_pair" (dynamic-link))))
+      (equal? (make-pointer 123)
+              (make-pointer 123 finalizer))))
+
+  (pass-if "not equal?"
+    (not (equal? (make-pointer 123) (make-pointer 456)))))
 
 
 (with-test-prefix "pointer<->bytevector"
@@ -89,6 +101,78 @@
     (with-latin1-locale
       (let ((s "Szép jó napot!"))
         (string=? s (pointer->string (string->pointer s)))))))
+
+
+(with-test-prefix "procedure->pointer"
+
+  (define qsort
+    ;; Bindings for libc's `qsort' function.
+    (pointer->procedure void
+                        (dynamic-func "qsort" (dynamic-link))
+                        (list '* size_t size_t '*)))
+
+  (define (dereference-pointer-to-byte ptr)
+    (let ((b (pointer->bytevector ptr 1)))
+      (bytevector-u8-ref b 0)))
+
+  (define input
+    '(7 1 127 3 5 4 77 2 9 0))
+
+  (pass-if "qsort"
+    (if (defined? 'procedure->pointer)
+        (let* ((called? #f)
+               (cmp     (lambda (x y)
+                          (set! called? #t)
+                          (- (dereference-pointer-to-byte x)
+                             (dereference-pointer-to-byte y))))
+               (ptr     (procedure->pointer int cmp (list '* '*)))
+               (bv      (u8-list->bytevector input)))
+          (qsort (bytevector->pointer bv) (bytevector-length bv) 1
+                 (procedure->pointer int cmp (list '* '*)))
+          (and called?
+               (equal? (bytevector->u8-list bv)
+                       (sort input <))))
+        (throw 'unresolved)))
+
+  (pass-if-exception "qsort, wrong return type"
+    exception:wrong-type-arg
+
+    (if (defined? 'procedure->pointer)
+        (let* ((cmp     (lambda (x y) #f)) ; wrong return type
+               (ptr     (procedure->pointer int cmp (list '* '*)))
+               (bv      (u8-list->bytevector input)))
+          (qsort (bytevector->pointer bv) (bytevector-length bv) 1
+                 (procedure->pointer int cmp (list '* '*)))
+          #f)
+        (throw 'unresolved)))
+
+  (pass-if-exception "qsort, wrong arity"
+    exception:wrong-num-args
+
+    (if (defined? 'procedure->pointer)
+        (let* ((cmp     (lambda (x y z) #f)) ; wrong arity
+               (ptr     (procedure->pointer int cmp (list '* '*)))
+               (bv      (u8-list->bytevector input)))
+          (qsort (bytevector->pointer bv) (bytevector-length bv) 1
+                 (procedure->pointer int cmp (list '* '*)))
+          #f)
+        (throw 'unresolved)))
+
+  (pass-if "bijection"
+    (if (defined? 'procedure->pointer)
+        (let* ((proc  (lambda (x y z)
+                        (+ x y z 0.0)))
+               (ret   double)
+               (args  (list float int16 double))
+               (proc* (pointer->procedure ret
+                                          (procedure->pointer ret proc args)
+                                          args))
+               (arg1  (map (cut / <> 2.0) (iota 123)))
+               (arg2  (iota 123 32000))
+               (arg3  (map (cut / <> 4.0) (iota 123 100 4))))
+          (equal? (map proc arg1 arg2 arg3)
+                  (map proc* arg1 arg2 arg3)))
+        (throw 'unresolved))))
 
 
 (with-test-prefix "structs"

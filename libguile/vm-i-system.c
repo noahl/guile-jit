@@ -31,7 +31,6 @@ VM_DEFINE_INSTRUCTION (0, nop, "nop", 0, 0, 0)
 
 VM_DEFINE_INSTRUCTION (1, halt, "halt", 0, 0, 0)
 {
-  HALT_HOOK ();
   nvalues = SCM_I_INUM (*sp--);
   NULLSTACK (1);
   if (nvalues == 1)
@@ -60,12 +59,6 @@ VM_DEFINE_INSTRUCTION (1, halt, "halt", 0, 0, 0)
   }
   
   goto vm_done;
-}
-
-VM_DEFINE_INSTRUCTION (2, break, "break", 0, 0, 0)
-{
-  BREAK_HOOK ();
-  NEXT;
 }
 
 VM_DEFINE_INSTRUCTION (3, drop, "drop", 0, 1, 0)
@@ -780,7 +773,7 @@ VM_DEFINE_INSTRUCTION (54, call, "call", 1, -1, 1)
   SCM_FRAME_SET_RETURN_ADDRESS (fp, ip);
   SCM_FRAME_SET_MV_RETURN_ADDRESS (fp, 0);
   ip = SCM_C_OBJCODE_BASE (bp);
-  ENTER_HOOK ();
+  PUSH_CONTINUATION_HOOK ();
   APPLY_HOOK ();
 
   jitcode = SCM_OBJCODE_JITCODE(SCM_PROGRAM_OBJCODE(program));
@@ -835,8 +828,6 @@ VM_DEFINE_INSTRUCTION (55, tail_call, "tail-call", 1, -1, 1)
       CHECK_STACK_LEAK ();
 #endif
 
-      EXIT_HOOK ();
-
       /* switch programs */
       CACHE_PROGRAM ();
       /* shuffle down the program and the arguments */
@@ -849,7 +840,6 @@ VM_DEFINE_INSTRUCTION (55, tail_call, "tail-call", 1, -1, 1)
 
       ip = SCM_C_OBJCODE_BASE (bp);
 
-      ENTER_HOOK ();
       APPLY_HOOK ();
       NEXT;
     }
@@ -1100,7 +1090,7 @@ VM_DEFINE_INSTRUCTION (61, mv_call, "mv-call", 4, -1, 1)
   SCM_FRAME_SET_RETURN_ADDRESS (fp, ip);
   SCM_FRAME_SET_MV_RETURN_ADDRESS (fp, mvra);
   ip = SCM_C_OBJCODE_BASE (bp);
-  ENTER_HOOK ();
+  PUSH_CONTINUATION_HOOK ();
   APPLY_HOOK ();
   NEXT;
 }
@@ -1169,12 +1159,17 @@ VM_DEFINE_INSTRUCTION (64, call_cc, "call/cc", 0, 1, 1)
     }
   else 
     {
-      /* otherwise, the vm continuation was reinstated, and
-         scm_i_vm_return_to_continuation pushed on one value. So pull our regs
-         back down from the vp, and march on to the next instruction. */
+      /* Otherwise, the vm continuation was reinstated, and
+         vm_return_to_continuation pushed on one value. We know only one
+         value was returned because we are in value context -- the
+         previous block jumped to vm_call, not vm_mv_call, after all.
+
+         So, pull our regs back down from the vp, and march on to the
+         next instruction. */
       CACHE_REGISTER ();
       program = SCM_FRAME_PROGRAM (fp);
       CACHE_PROGRAM ();
+      RESTORE_CONTINUATION_HOOK ();
       NEXT;
     }
 }
@@ -1204,10 +1199,17 @@ VM_DEFINE_INSTRUCTION (65, tail_call_cc, "tail-call/cc", 0, 1, 1)
   else
     {
       /* Otherwise, cache regs and NEXT, as above. Invoking the continuation
-         does a return from the frame, either to the RA or MVRA. */
+         does a return from the frame, either to the RA or
+         MVRA. */
       CACHE_REGISTER ();
       program = SCM_FRAME_PROGRAM (fp);
       CACHE_PROGRAM ();
+      /* Unfortunately we don't know whether we are at the RA, and thus
+         have one value without an nvalues marker, or we are at the
+         MVRA and thus have multiple values and the nvalues
+         marker. Instead of adding heuristics here, we will let hook
+         client code do that. */
+      RESTORE_CONTINUATION_HOOK ();
       NEXT;
     }
 }
@@ -1215,8 +1217,7 @@ VM_DEFINE_INSTRUCTION (65, tail_call_cc, "tail-call/cc", 0, 1, 1)
 VM_DEFINE_INSTRUCTION (66, return, "return", 0, 1, 1)
 {
  vm_return:
-  EXIT_HOOK ();
-  RETURN_HOOK (1);
+  POP_CONTINUATION_HOOK (1);
 
   VM_HANDLE_INTERRUPTS;
 
@@ -1255,8 +1256,7 @@ VM_DEFINE_INSTRUCTION (67, return_values, "return/values", 1, -1, -1)
      that perhaps it might be used without declaration. Fooey to that, I say. */
   nvalues = FETCH ();
  vm_return_values:
-  EXIT_HOOK ();
-  RETURN_HOOK (nvalues);
+  POP_CONTINUATION_HOOK (nvalues);
 
   VM_HANDLE_INTERRUPTS;
 
@@ -1534,6 +1534,9 @@ VM_DEFINE_INSTRUCTION (83, prompt, "prompt", 4, 2, 0)
       CACHE_REGISTER ();
       program = SCM_FRAME_PROGRAM (fp);
       CACHE_PROGRAM ();
+      /* The stack contains the values returned to this prompt, along
+         with a number-of-values marker -- like an MV return. */
+      ABORT_CONTINUATION_HOOK ();
       NEXT;
     }
       

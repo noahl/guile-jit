@@ -84,15 +84,18 @@ coverage data.  Return code coverage data and the values returned by THUNK."
               (set-cdr! proc-entry (make-hash-table))
               (loop))))))
 
+  ;; FIXME: It's unclear what the dynamic-wind is for, given that if the
+  ;; VM is different from the current one, continuations will not be
+  ;; resumable.
   (call-with-values (lambda ()
-                      (let ((level (vm-trace-level vm))
-                            (hook  (vm-next-hook vm)))
+                      (let ((level   (vm-trace-level vm))
+                            (hook    (vm-next-hook vm)))
                         (dynamic-wind
                           (lambda ()
                             (set-vm-trace-level! vm (+ level 1))
                             (add-hook! hook collect!))
                           (lambda ()
-                            (vm-apply vm thunk '()))
+                            (call-with-vm vm thunk))
                           (lambda ()
                             (set-vm-trace-level! vm level)
                             (remove-hook! hook collect!)))))
@@ -196,12 +199,14 @@ coverage data.  Return code coverage data and the values returned by THUNK."
 if PROC was not executed.  When PROC is a closure, the number of times its code
 was executed is returned, not the number of times this code associated with this
 particular closure was executed."
-  (and=> (hashx-ref hashq-proc assq-proc
-                    (data-procedure->ip-counts data) proc)
-         (let ((sources (program-sources* data proc)))
-           (lambda (ip-counts)
-             (let ((entry-ip (source:addr (car sources)))) ;; FIXME: broken with lambda*
-               (hashv-ref ip-counts entry-ip 0))))))
+  (let ((sources (program-sources* data proc)))
+    (and (pair? sources)
+         (and=> (hashx-ref hashq-proc assq-proc
+                           (data-procedure->ip-counts data) proc)
+                (lambda (ip-counts)
+                  ;; FIXME: broken with lambda*
+                  (let ((entry-ip (source:addr (car sources))))
+                    (hashv-ref ip-counts entry-ip 0)))))))
 
 (define (program-sources* data proc)
   ;; A memoizing version of `program-sources'.
@@ -327,10 +332,10 @@ gathered, even if their code was not executed."
     (and (program? proc)
          (let ((sources (program-sources* data proc)))
            (and (pair? sources)
-                (let* ((line (source:line (car sources)))
+                (let* ((line (source:line-for-user (car sources)))
                        (name (or (procedure-name proc)
-                                 (format #f "anonymous-l~a" (+ 1 line)))))
-                  (format port "FN:~A,~A~%" (+ 1 line) name)
+                                 (format #f "anonymous-l~a" line))))
+                  (format port "FN:~A,~A~%" line name)
                   (and=> (procedure-execution-count data proc)
                          (lambda (count)
                            (format port "FNDA:~A,~A~%" count name))))))))

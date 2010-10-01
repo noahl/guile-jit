@@ -59,6 +59,39 @@
 
 
 
+/*
+ * Debugging options.
+ */
+
+scm_t_option scm_debug_opts[] = {
+  { SCM_OPTION_BOOLEAN, "backwards", 0,
+    "Display backtrace in anti-chronological order." },
+  { SCM_OPTION_INTEGER, "width", 79, "Maximal width of backtrace." },
+  { SCM_OPTION_INTEGER, "depth", 20, "Maximal length of printed backtrace." },
+  { SCM_OPTION_BOOLEAN, "backtrace", 1, "Show backtrace on error." },
+  /* This default stack limit will be overridden by init_stack_limit(),
+     if we have getrlimit() and the stack limit is not INFINITY. But it is still
+     important, as some systems have both the soft and the hard limits set to
+     INFINITY; in that case we fall back to this value.
+
+     The situation is aggravated by certain compilers, which can consume
+     "beaucoup de stack", as they say in France.
+
+     See http://thread.gmane.org/gmane.lisp.guile.devel/8599/focus=8662 for
+     more discussion. This setting is 640 KB on 32-bit arches (should be enough
+     for anyone!) or a whoppin' 1280 KB on 64-bit arches.
+  */
+  { SCM_OPTION_INTEGER, "stack", 160000, "Stack size limit (measured in words; 0 = no check)." },
+  { SCM_OPTION_SCM, "show-file-name", (unsigned long)SCM_BOOL_T,
+    "Show file names and line numbers "
+    "in backtraces when not `#f'.  A value of `base' "
+    "displays only base names, while `#t' displays full names."},
+  { SCM_OPTION_BOOLEAN, "warn-deprecated", 0,
+    "Warn when deprecated features are used." },
+  { 0 }, 
+};
+
+
 /* {Run time control of the debugging evaluator}
  */
 
@@ -75,55 +108,12 @@ SCM_DEFINE (scm_debug_options, "debug-options-interface", 0, 1, 0,
   scm_dynwind_critical_section (SCM_BOOL_F);
 
   ans = scm_options (setting, scm_debug_opts, FUNC_NAME);
-  if (SCM_N_FRAMES < 1)
-    {
-      scm_options (ans, scm_debug_opts, FUNC_NAME);
-      SCM_OUT_OF_RANGE (1, setting);
-    }
 #ifdef STACK_CHECKING
   scm_stack_checking_enabled_p = SCM_STACK_CHECKING_P;
 #endif
 
   scm_dynwind_end ();
   return ans;
-}
-#undef FUNC_NAME
-
-
-static void
-with_traps_before (void *data)
-{
-  int *trap_flag = data;
-  *trap_flag = SCM_TRAPS_P;
-  SCM_TRAPS_P = 1;
-}
-
-static void
-with_traps_after (void *data)
-{
-  int *trap_flag = data;
-  SCM_TRAPS_P = *trap_flag;
-}
-
-static SCM
-with_traps_inner (void *data)
-{
-  SCM thunk = SCM_PACK ((scm_t_bits) data);
-  return scm_call_0 (thunk);
-}
-
-SCM_DEFINE (scm_with_traps, "with-traps", 1, 0, 0, 
-            (SCM thunk),
-	    "Call @var{thunk} with traps enabled.")
-#define FUNC_NAME s_scm_with_traps
-{
-  int trap_flag;
-  SCM_VALIDATE_THUNK (1, thunk);
-  return scm_internal_dynamic_wind (with_traps_before,
-				    with_traps_inner,
-				    with_traps_after,
-				    (void *) SCM_UNPACK (thunk),
-				    &trap_flag);
 }
 #undef FUNC_NAME
 

@@ -19,23 +19,16 @@
 ;;; Code:
 
 (define-module (system vm vm)
-  #:use-module (system vm frame)
-  #:use-module (system vm program)
-  #:export (vm? the-vm make-vm vm-version vm-apply
-            vm:ip vm:sp vm:fp vm:last-ip
-
-            vm-load vm-option set-vm-option! vm-version
-            vms:time vms:clock
+  #:export (vm?
+            make-vm the-vm call-with-vm
+            vm:ip vm:sp vm:fp
 
             vm-trace-level set-vm-trace-level!
-            vm-next-hook vm-apply-hook vm-boot-hook vm-return-hook
-            vm-break-hook vm-exit-hook vm-halt-hook vm-enter-hook))
+            vm-engine set-vm-engine! set-default-vm-engine!
+            vm-push-continuation-hook vm-pop-continuation-hook
+            vm-apply-hook
+            vm-next-hook
+            vm-abort-continuation-hook vm-restore-continuation-hook))
 
 (load-extension (string-append "libguile-" (effective-version))
                 "scm_init_vm")
-
-(define (vms:time stat) (vector-ref stat 0))
-(define (vms:clock stat) (vector-ref stat 1))
-
-(define (vm-load vm objcode)
-  (vm-apply vm (make-program objcode) '()))

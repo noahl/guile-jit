@@ -1502,6 +1502,12 @@ scm_from_stringn (const char *str, size_t len, const char *encoding,
 }
 
 SCM
+scm_from_latin1_stringn (const char *str, size_t len)
+{
+  return scm_from_stringn (str, len, NULL, SCM_FAILED_CONVERSION_ERROR);
+}
+
+SCM
 scm_from_locale_stringn (const char *str, size_t len)
 {
   const char *enc;
@@ -1569,16 +1575,17 @@ scm_take_locale_string (char *str)
   return scm_take_locale_stringn (str, -1);
 }
 
-/* Change libunistring escapes (\uXXXX and \UXXXXXXXX) to \xXX \uXXXX
-   and \UXXXXXX.  */
-static void
-unistring_escapes_to_guile_escapes (char **bufp, size_t *lenp)
+/* Change libunistring escapes (`\uXXXX' and `\UXXXXXXXX') in BUF, a
+   *LENP-byte locale-encoded string, to `\xXX', `\uXXXX', or `\UXXXXXX'.
+   Set *LENP to the size of the resulting string.  */
+void
+scm_i_unistring_escapes_to_guile_escapes (char *buf, size_t *lenp)
 {
   char *before, *after;
   size_t i, j;
 
-  before = *bufp;
-  after = *bufp;
+  before = buf;
+  after = buf;
   i = 0;
   j = 0;
   while (i < *lenp)
@@ -1621,12 +1628,15 @@ unistring_escapes_to_guile_escapes (char **bufp, size_t *lenp)
         }
     }
   *lenp = j;
-  after = scm_realloc (after, j);
 }
 
-/* Change libunistring escapes (\uXXXX and \UXXXXXXXX) to \xXXXX; */
-static void
-unistring_escapes_to_r6rs_escapes (char **bufp, size_t *lenp)
+/* Change libunistring escapes (`\uXXXX' and `\UXXXXXXXX') in BUF, a
+   *LENP-byte locale-encoded string, to `\xXXXX;'.  Set *LEN to the size
+   of the resulting string.  BUF must be large enough to handle the
+   worst case when `\uXXXX' escapes (6 characters) are replaced by
+   `\xXXXX;' (7 characters).  */
+void
+scm_i_unistring_escapes_to_r6rs_escapes (char *buf, size_t *lenp)
 {
   char *before, *after;
   size_t i, j;
@@ -1635,7 +1645,7 @@ unistring_escapes_to_r6rs_escapes (char **bufp, size_t *lenp)
   size_t max_out_len = (*lenp * 7) / 6 + 1;
   size_t nzeros, ndigits;
 
-  before = *bufp;
+  before = buf;
   after = alloca (max_out_len);
   i = 0;
   j = 0;
@@ -1693,10 +1703,14 @@ unistring_escapes_to_r6rs_escapes (char **bufp, size_t *lenp)
         }
     }
   *lenp = j;
-  before = scm_realloc (before, j);
   memcpy (before, after, j);
 }
 
+char *
+scm_to_latin1_stringn (SCM str, size_t *lenp)
+{
+  return scm_to_stringn (str, lenp, NULL, SCM_FAILED_CONVERSION_ERROR);
+}
 
 char *
 scm_to_locale_stringn (SCM str, size_t *lenp)
@@ -1806,9 +1820,18 @@ scm_to_stringn (SCM str, size_t *lenp, const char *encoding,
   if (handler == SCM_FAILED_CONVERSION_ESCAPE_SEQUENCE)
     {
       if (SCM_R6RS_ESCAPES_P)
-        unistring_escapes_to_r6rs_escapes (&buf, &len);
+	{
+	  /* The worst case is if the input string contains all 4-digit
+	     hex escapes.  "\uXXXX" (six characters) becomes "\xXXXX;"
+	     (seven characters).  Make BUF large enough to hold
+	     that.  */
+	  buf = scm_realloc (buf, (len * 7) / 6 + 1);
+	  scm_i_unistring_escapes_to_r6rs_escapes (buf, &len);
+	}
       else
-        unistring_escapes_to_guile_escapes (&buf, &len);
+        scm_i_unistring_escapes_to_guile_escapes (buf, &len);
+
+      buf = scm_realloc (buf, len);
     }
   if (lenp)
     *lenp = len;

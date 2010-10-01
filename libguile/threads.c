@@ -1,4 +1,4 @@
-/* Copyright (C) 1995,1996,1997,1998,2000,2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+/* Copyright (C) 1995,1996,1997,1998,2000,2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -37,6 +37,8 @@
 #if HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
+
+#include <assert.h>
 
 #include "libguile/validate.h"
 #include "libguile/root.h"
@@ -466,7 +468,12 @@ do_thread_exit (void *v)
 	  fat_mutex *m  = SCM_MUTEX_DATA (mutex);
 
 	  scm_i_pthread_mutex_lock (&m->lock);
+
+	  /* Since MUTEX is in `t->mutexes', T must be its owner.  */
+	  assert (scm_is_eq (m->owner, t->handle));
+
 	  unblock_from_queue (m->waiting);
+
 	  scm_i_pthread_mutex_unlock (&m->lock);
 	}
 
@@ -1234,10 +1241,10 @@ fat_mutex_lock (SCM mutex, scm_t_timespec *timeout, SCM owner, int *ret)
 	      scm_i_pthread_mutex_lock (&t->admin_mutex);
 
 	      /* Only keep a weak reference to MUTEX so that it's not
-		 retained when not referenced elsewhere (bug #27450).  Note
-		 that the weak pair itself it still retained, but it's better
-		 than retaining MUTEX and the threads referred to by its
-		 associated queue.  */
+		 retained when not referenced elsewhere (bug #27450).
+		 The weak pair itself is eventually removed when MUTEX
+		 is unlocked.  Note that `t->mutexes' lists mutexes
+		 currently held by T, so it should be small.  */
 	      t->mutexes = scm_weak_car_pair (mutex, t->mutexes);
 
 	      scm_i_pthread_mutex_unlock (&t->admin_mutex);
@@ -1381,7 +1388,7 @@ fat_mutex_unlock (SCM mutex, SCM cond,
 
   owner = m->owner;
 
-  if (!scm_is_eq (owner, scm_current_thread ()))
+  if (!scm_is_eq (owner, t->handle))
     {
       if (m->level == 0)
 	{
@@ -1390,7 +1397,7 @@ fat_mutex_unlock (SCM mutex, SCM cond,
 	      scm_i_pthread_mutex_unlock (&m->lock);
 	      scm_misc_error (NULL, "mutex not locked", SCM_EOL);
 	    }
-	  owner = scm_current_thread ();
+	  owner = t->handle;
 	}
       else if (!m->allow_external_unlock)
 	{
@@ -1409,7 +1416,11 @@ fat_mutex_unlock (SCM mutex, SCM cond,
 	  if (m->level > 0)
 	    m->level--;
 	  if (m->level == 0)
-	    m->owner = unblock_from_queue (m->waiting);
+	    {
+	      /* Change the owner of MUTEX.  */
+	      t->mutexes = scm_delq_x (mutex, t->mutexes);
+	      m->owner = unblock_from_queue (m->waiting);
+	    }
 
 	  t->block_asyncs++;
 
@@ -1453,7 +1464,11 @@ fat_mutex_unlock (SCM mutex, SCM cond,
       if (m->level > 0)
 	m->level--;
       if (m->level == 0)
-	m->owner = unblock_from_queue (m->waiting);
+	{
+	  /* Change the owner of MUTEX.  */
+	  t->mutexes = scm_delq_x (mutex, t->mutexes);
+	  m->owner = unblock_from_queue (m->waiting);
+	}
 
       scm_i_pthread_mutex_unlock (&m->lock);
       ret = 1;

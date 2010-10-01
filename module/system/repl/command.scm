@@ -6,12 +6,12 @@
 ;; modify it under the terms of the GNU Lesser General Public
 ;; License as published by the Free Software Foundation; either
 ;; version 3 of the License, or (at your option) any later version.
-;; 
+;;
 ;; This library is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 ;; Lesser General Public License for more details.
-;; 
+;;
 ;; You should have received a copy of the GNU Lesser General Public
 ;; License along with this library; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
@@ -27,6 +27,7 @@
   #:use-module (system repl debug)
   #:use-module (system vm objcode)
   #:use-module (system vm program)
+  #:use-module (system vm trap-state)
   #:use-module (system vm vm)
   #:autoload (system base language) (lookup-language language-reader)
   #:autoload (system vm trace) (vm-trace)
@@ -55,7 +56,11 @@
 	      (disassemble x) (disassemble-file xx))
     (profile  (time t) (profile pr) (trace tr))
     (debug    (backtrace bt) (up) (down) (frame fr)
-              (procedure proc) (locals))
+              (procedure proc) (locals) (error-message error)
+              (break br bp) (break-at-source break-at bs)
+              (tracepoint tp)
+              (traps) (delete del) (disable) (enable)
+              (registers regs))
     (inspect  (inspect i) (pretty-print pp))
     (system   (gc) (statistics stat) (option o)
               (quit q continue cont))))
@@ -171,7 +176,7 @@
             (format #t "Throw to key `~a' with args `~s' while reading ~@[ argument `~A' of ~]command `~A'.\n"
                     key args form-name 'name)))
          (abort))
-       
+
        (% (let* ((expression0
                   (catch #t
                     (lambda ()
@@ -435,7 +440,7 @@ Time execution."
 Profile execution."
   ;; FIXME opts
   (apply statprof
-         (make-program (repl-compile repl (repl-parse repl form)))
+         (repl-prepare-eval-thunk repl (repl-parse repl form))
          opts))
 
 (define-meta-command (trace repl (form) . opts)
@@ -444,7 +449,7 @@ Trace execution."
   ;; FIXME: doc options, or somehow deal with them better
   (apply vm-trace
          (the-vm)
-         (make-program (repl-compile repl (repl-parse repl form)))
+         (repl-prepare-eval-thunk repl (repl-parse repl form))
          opts))
 
 
@@ -463,6 +468,8 @@ Trace execution."
                  (letrec-syntax
                      ((#,(datum->syntax #'repl 'frames)
                        (identifier-syntax (debug-frames debug)))
+                      (#,(datum->syntax #'repl 'message)
+                       (identifier-syntax (debug-error-message debug)))
                       (#,(datum->syntax #'repl 'index)
                        (identifier-syntax
                         (id (debug-index debug))
@@ -481,11 +488,11 @@ Print a backtrace.
 
 Print a backtrace of all stack frames, or innermost COUNT frames.
 If COUNT is negative, the last COUNT frames will be shown."
-  (print-frames frames 
+  (print-frames frames
                 #:count count
                 #:width width
                 #:full? full?))
-      
+
 (define-stack-command (up repl #:optional (count 1))
   "up [COUNT]
 Select a calling stack frame.
@@ -548,30 +555,120 @@ With an argument, select a frame by index, then show it."
   "procedure
 Print the procedure for the selected frame."
   (repl-print repl (frame-procedure cur)))
-      
+
 (define-stack-command (locals repl)
   "locals
 Show local variables.
 
 Show locally-bound variables in the selected frame."
   (print-locals cur))
-      
+
+(define-stack-command (error-message repl)
+  "error-message
+Show error message.
+
+Display the message associated with the error that started the current
+debugging REPL."
+  (format #t "~a~%" (if (string? message) message "No error message")))
+
+(define-meta-command (break repl (form))
+  "break PROCEDURE
+Break on calls to PROCEDURE.
+
+Starts a recursive prompt when PROCEDURE is called."
+  (let ((proc (repl-eval repl (repl-parse repl form))))
+    (if (not (procedure? proc))
+        (error "Not a procedure: ~a" proc)
+        (let ((idx (add-trap-at-procedure-call! proc)))
+          (format #t "Trap ~a: ~a.~%" idx (trap-name idx))))))
+
+(define-meta-command (break-at-source repl file line)
+  "break-at-source FILE LINE
+Break when control reaches the given source location.
+
+Starts a recursive prompt when control reaches line LINE of file FILE.
+Note that the given source location must be inside a procedure."
+  (let ((file (if (symbol? file) (symbol->string file) file)))
+    (let ((idx (add-trap-at-source-location! file line)))
+      (format #t "Trap ~a: ~a.~%" idx (trap-name idx)))))
+
+(define-meta-command (tracepoint repl (form))
+  "tracepoint PROCEDURE
+Add a tracepoint to PROCEDURE.
+
+A tracepoint will print out the procedure and its arguments, when it is
+called, and its return value(s) when it returns."
+  (let ((proc (repl-eval repl (repl-parse repl form))))
+    (if (not (procedure? proc))
+        (error "Not a procedure: ~a" proc)
+        (let ((idx (add-trace-at-procedure-call! proc)))
+          (format #t "Trap ~a: ~a.~%" idx (trap-name idx))))))
+
+(define-meta-command (traps repl)
+  "traps
+Show the set of currently attached traps.
+
+Show the set of currently attached traps (breakpoints and tracepoints)."
+  (let ((traps (list-traps)))
+    (if (null? traps)
+        (format #t "No traps set.~%")
+        (for-each (lambda (idx)
+                    (format #t "  ~a: ~a~a~%"
+                            idx (trap-name idx)
+                            (if (trap-enabled? idx) "" " (disabled)")))
+                  traps))))
+
+(define-meta-command (delete repl idx)
+  "delete IDX
+Delete a trap.
+
+Delete a trap."
+  (if (not (integer? idx))
+      (error "expected a trap index (a non-negative integer)" idx)
+      (delete-trap! idx)))
+
+(define-meta-command (disable repl idx)
+  "disable IDX
+Disable a trap.
+
+Disable a trap."
+  (if (not (integer? idx))
+      (error "expected a trap index (a non-negative integer)" idx)
+      (disable-trap! idx)))
+
+(define-meta-command (enable repl idx)
+  "enable IDX
+Enable a trap.
+
+Enable a trap."
+  (if (not (integer? idx))
+      (error "expected a trap index (a non-negative integer)" idx)
+      (enable-trap! idx)))
+
+(define-stack-command (registers repl)
+  "registers
+Print registers.
+
+Print the registers of the current frame."
+  (print-registers cur))
+
+
 
 ;;;
 ;;; Inspection commands
 ;;;
 
-(define-stack-command (inspect repl (form))
+(define-meta-command (inspect repl (form))
   "inspect EXP
 Inspect the result(s) of evaluating EXP."
-  (call-with-values (make-program (repl-compile repl (repl-parse repl form)))
+  (call-with-values (repl-prepare-eval-thunk repl (repl-parse repl form))
     (lambda args
       (for-each %inspect args))))
 
 (define-meta-command (pretty-print repl (form))
   "pretty-print EXP
 Pretty-print the result(s) of evaluating EXP."
-  (call-with-values (make-program (repl-compile repl (repl-parse repl form)))
+  (call-with-values (repl-prepare-eval-thunk repl (repl-parse repl form))
     (lambda args
       (for-each
        (lambda (x)
@@ -581,7 +678,7 @@ Pretty-print the result(s) of evaluating EXP."
 
 
 ;;;
-;;; System commands 
+;;; System commands
 ;;;
 
 (define guile:gc gc)

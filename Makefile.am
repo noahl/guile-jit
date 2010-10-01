@@ -25,15 +25,16 @@
 AUTOMAKE_OPTIONS = 1.10
 
 SUBDIRS = lib meta libguile guile-readline emacs \
-	  srfi examples test-suite benchmark-suite am \
+	  examples test-suite benchmark-suite am \
 	  module doc
 
 libguileincludedir = $(pkgincludedir)/$(GUILE_EFFECTIVE_VERSION)
 libguileinclude_HEADERS = libguile.h
 
-EXTRA_DIST = LICENSE HACKING GUILE-VERSION		\
-	     m4/ChangeLog-2008 \
-	     m4/autobuild.m4 ChangeLog-2008
+EXTRA_DIST = LICENSE HACKING GUILE-VERSION	\
+	     m4/ChangeLog-2008			\
+	     ChangeLog-2008			\
+	     .version
 
 TESTS = check-guile
 

@@ -74,10 +74,13 @@ AM_PROG_CC_C_O
 
 AC_LIBTOOL_DLOPEN
 AC_PROG_LIBTOOL
-AC_CHECK_LIB([ltdl], [lt_dlinit], ,
-  [AC_MSG_ERROR([libltdl not found.  See README.])])
-AC_CHECK_HEADER([ltdl.h], [],
-  [AC_MSG_ERROR([<ltdl.h> not found.  See README.])])
+
+dnl Check for libltdl.
+AC_LIB_HAVE_LINKFLAGS([ltdl], [], [#include <ltdl.h>],
+  [lt_dlopenext ("foo");])
+if test "x$HAVE_LIBLTDL" != "xyes"; then
+  AC_MSG_ERROR([GNU libltdl (Libtool) not found, see README.])
+fi
 
 AC_CHECK_PROG(have_makeinfo, makeinfo, yes, no)
 AM_CONDITIONAL(HAVE_MAKEINFO, test "$have_makeinfo" = yes)
@@ -1112,8 +1115,6 @@ fi
 
 AC_REPLACE_FUNCS([strerror memmove mkstemp])
 
-AC_CHECK_HEADERS(floatingpoint.h ieeefp.h nan.h)
-
 # Reasons for testing:
 #   asinh, acosh, atanh, trunc - C99 standard, generally not available on
 #                                older systems
@@ -1546,30 +1547,6 @@ AC_SUBST(LIBGUILE_INTERFACE_REVISION)
 AC_SUBST(LIBGUILE_INTERFACE_AGE)
 AC_SUBST(LIBGUILE_INTERFACE)
 
-AC_SUBST(LIBGUILE_SRFI_SRFI_1_MAJOR)
-AC_SUBST(LIBGUILE_SRFI_SRFI_1_INTERFACE_CURRENT)
-AC_SUBST(LIBGUILE_SRFI_SRFI_1_INTERFACE_REVISION)
-AC_SUBST(LIBGUILE_SRFI_SRFI_1_INTERFACE_AGE)
-AC_SUBST(LIBGUILE_SRFI_SRFI_1_INTERFACE)
-
-AC_SUBST(LIBGUILE_SRFI_SRFI_4_MAJOR)
-AC_SUBST(LIBGUILE_SRFI_SRFI_4_INTERFACE_CURRENT)
-AC_SUBST(LIBGUILE_SRFI_SRFI_4_INTERFACE_REVISION)
-AC_SUBST(LIBGUILE_SRFI_SRFI_4_INTERFACE_AGE)
-AC_SUBST(LIBGUILE_SRFI_SRFI_4_INTERFACE)
-
-AC_SUBST(LIBGUILE_SRFI_SRFI_13_14_MAJOR)
-AC_SUBST(LIBGUILE_SRFI_SRFI_13_14_INTERFACE_CURRENT)
-AC_SUBST(LIBGUILE_SRFI_SRFI_13_14_INTERFACE_REVISION)
-AC_SUBST(LIBGUILE_SRFI_SRFI_13_14_INTERFACE_AGE)
-AC_SUBST(LIBGUILE_SRFI_SRFI_13_14_INTERFACE)
-
-AC_SUBST(LIBGUILE_SRFI_SRFI_60_MAJOR)
-AC_SUBST(LIBGUILE_SRFI_SRFI_60_INTERFACE_CURRENT)
-AC_SUBST(LIBGUILE_SRFI_SRFI_60_INTERFACE_REVISION)
-AC_SUBST(LIBGUILE_SRFI_SRFI_60_INTERFACE_AGE)
-AC_SUBST(LIBGUILE_SRFI_SRFI_60_INTERFACE)
-
 AC_SUBST(LIBGUILE_I18N_MAJOR)
 AC_SUBST(LIBGUILE_I18N_INTERFACE_CURRENT)
 AC_SUBST(LIBGUILE_I18N_INTERFACE_REVISION)
@@ -1596,10 +1573,9 @@ AC_SUBST(top_builddir_absolute)
 top_srcdir_absolute=`(cd $srcdir && pwd)`
 AC_SUBST(top_srcdir_absolute)
 
-dnl We need `sitedir' in `guile-1.8.pc'.
-dnl Note: `sitedir' must be kept in sync with `GUILE_SITE_DIR' in `guile.m4'.
+dnl `sitedir' goes into libpath.h and the pkg-config file.
 pkgdatadir="$datadir/$PACKAGE_TARNAME"
-sitedir="$pkgdatadir/site"
+sitedir="$pkgdatadir/site/$GUILE_EFFECTIVE_VERSION"
 AC_SUBST([sitedir])
 
 # Additional SCM_I_GSC definitions are above.
@@ -1621,7 +1597,6 @@ AC_CONFIG_FILES([
   examples/Makefile
   libguile/Makefile
   libguile/version.h
-  srfi/Makefile
   guile-readline/Makefile
   test-suite/Makefile
   test-suite/standalone/Makefile

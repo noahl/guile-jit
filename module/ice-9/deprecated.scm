@@ -64,9 +64,8 @@
             the-last-stack
             save-stack
             named-module-use!
-            top-repl)
-
-  #:replace (module-ref-submodule module-define-submodule!))
+            top-repl
+            turn-on-debugging))
 
 
 ;;;; Deprecated definitions.
@@ -250,18 +249,11 @@
  #\y
  (lambda (c port)
    (issue-deprecation-warning
-    "The `#y' bitvector syntax is deprecated.  Use `#*' instead.")
+    "The `#y' bytevector syntax is deprecated.  Use `#s8' instead.")
    (let ((x (read port)))
      (cond
-      ((list? x)
-       (list->bitvector
-        (map (lambda (x)
-               (cond ((zero? x) #f)
-                     ((eqv? x 1) #t)
-                     (else (error "invalid #y element" x))))
-             x)))
-      (else
-       (error "#y needs to be followed by a list" x))))))
+      ((list? x) (list->s8vector x))
+      (else (error "#y needs to be followed by a list" x))))))
 
 (define (unmemoize-expr . args)
   (issue-deprecation-warning
@@ -326,23 +318,8 @@
                    (lambda ()
                      (set! id old-v) ...)))))))))
 
-(define (module-ref-submodule module name)
-  (or (hashq-ref (module-submodules module) name)
-      (and (module-submodule-binder module)
-           ((module-submodule-binder module) module name))
-      (let ((var (module-local-variable module name)))
-        (and (variable-bound? var)
-             (module? (variable-ref var))
-             (begin
-               (warn "module" module "not in submodules table")
-               (variable-ref var))))))
-
-(define (module-define-submodule! module name submodule)
-  (let ((var (module-local-variable module name)))
-    (if (and var (variable-bound? var) (not (module? (variable-ref var))))
-        (warn "defining module" module ": not overriding local definition" var)
-        (module-define! module name submodule)))
-  (hashq-set! (module-submodules module) name submodule))
+;; There are deprecated definitions for module-ref-submodule and
+;; module-define-submodule! in boot-9.scm.
 
 ;; Define (%app) and (%app modules), and have (app) alias (%app). This
 ;; side-effects the-root-module, both to the submodules table and (through
@@ -687,3 +664,21 @@ it.")
   (issue-deprecation-warning
    "`top-repl' has moved to the `(ice-9 top-repl)' module.")
   ((module-ref (resolve-module '(ice-9 top-repl)) 'top-repl)))
+
+(set! debug-enable
+      (let ((debug-enable debug-enable))
+        (lambda opts
+          (if (memq 'debug opts)
+              (begin
+                (issue-deprecation-warning
+                 "`(debug-enable 'debug)' is obsolete and has no effect."
+                 "Remove it from your code.")
+                (apply debug-enable (delq 'debug opts)))
+              (apply debug-enable opts)))))
+
+(define (turn-on-debugging)
+  (issue-deprecation-warning
+   "`(turn-on-debugging)' is obsolete and usually has no effect."
+   "Debugging capabilities are present by default.")
+  (debug-enable 'backtrace)
+  (read-enable 'positions))

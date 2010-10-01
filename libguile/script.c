@@ -22,6 +22,7 @@
 #  include <config.h>
 #endif
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
@@ -39,6 +40,7 @@
 #include "libguile/strports.h"
 #include "libguile/validate.h"
 #include "libguile/version.h"
+#include "libguile/vm.h"
 
 #ifdef HAVE_STRING_H
 #include <string.h>
@@ -404,7 +406,6 @@ SCM_SYMBOL (sym_load, "load");
 SCM_SYMBOL (sym_eval_string, "eval-string");
 SCM_SYMBOL (sym_command_line, "command-line");
 SCM_SYMBOL (sym_begin, "begin");
-SCM_SYMBOL (sym_turn_on_debugging, "turn-on-debugging");
 SCM_SYMBOL (sym_load_user_init, "load-user-init");
 SCM_SYMBOL (sym_ice_9, "ice-9");
 SCM_SYMBOL (sym_top_repl, "top-repl");
@@ -643,7 +644,7 @@ scm_compile_shell_switches (int argc, char **argv)
 	       || ! strcmp (argv[i], "--help"))
 	{
 	  scm_shell_usage (0, 0);
-	  exit (0);
+	  exit (EXIT_SUCCESS);
 	}
 
       else if (! strcmp (argv[i], "-v")
@@ -653,7 +654,7 @@ scm_compile_shell_switches (int argc, char **argv)
 	  version_etc (stdout, scm_usage_name, PACKAGE_NAME, PACKAGE_VERSION,
 		       /* XXX: Use gettext for the string below.  */
 		       "the Guile developers", NULL);
-	  exit (0);
+	  exit (EXIT_SUCCESS);
 	}
 
       else
@@ -714,10 +715,11 @@ scm_compile_shell_switches (int argc, char **argv)
     }
 
   /* If debugging was requested, or we are interactive and debugging
-     was not explicitly turned off, turn on debugging. */
+     was not explicitly turned off, use the debug engine. */
   if (turn_on_debugging || (interactive && !dont_turn_on_debugging))
     {
-      tail = scm_cons (scm_cons (sym_turn_on_debugging, SCM_EOL), tail);
+      scm_c_set_default_vm_engine_x (SCM_VM_DEBUG_ENGINE);
+      scm_c_set_vm_engine_x (scm_the_vm (), SCM_VM_DEBUG_ENGINE);
     }
 
   {

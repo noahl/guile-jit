@@ -21,6 +21,7 @@
 
 (define-module (system repl error-handling)
   #:use-module (system base pmatch)
+  #:use-module (system vm trap-state)
   #:use-module (system repl debug)
   #:export (call-with-error-handling
             with-error-handling))
@@ -32,9 +33,19 @@
 ;;; Error handling via repl debugging
 ;;;
 
+(define (error-string stack key args)
+  (with-output-to-string
+    (lambda ()
+      (pmatch args
+        ((,subr ,msg ,args . ,rest)
+         (display-error (vector-ref stack 0) (current-output-port)
+                        subr msg args rest))
+        (else
+         (format #t "Throw to key `~a' with args `~s'." key args))))))
+
 (define* (call-with-error-handling thunk #:key
                                    (on-error 'debug) (post-error 'catch)
-                                   (pass-keys '(quit)))
+                                   (pass-keys '(quit)) (trap-handler 'debug))
   (let ((in (current-input-port))
         (out (current-output-port))
         (err (current-error-port)))
@@ -45,9 +56,45 @@
             (lambda ()
               (with-error-to-port err
                 thunk))))))
-    
+
+    (define (debug-trap-handler frame trap-idx trap-name)
+      (let* ((tag (and (pair? (fluid-ref %stacks))
+                       (cdar (fluid-ref %stacks))))
+             (stack (narrow-stack->vector
+                     (make-stack frame)
+                     ;; Take the stack from the given frame, cutting 0
+                     ;; frames.
+                     0
+                     ;; Narrow the end of the stack to the most recent
+                     ;; start-stack.
+                     tag
+                     ;; And one more frame, because %start-stack
+                     ;; invoking the start-stack thunk has its own frame
+                     ;; too.
+                     0 (and tag 1)))
+             (error-msg (format #f "Trap ~d: ~a" trap-idx trap-name))
+             (debug (make-debug stack 0 error-msg)))
+        (with-saved-ports
+         (lambda ()
+           (format #t "~a~%" error-msg)
+           (format #t "Entering a new prompt.  ")
+           (format #t "Type `,bt' for a backtrace or `,q' to continue.\n")
+           ((@ (system repl repl) start-repl) #:debug debug)))))
+
+    (define (null-trap-handler frame trap-idx trap-name)
+      #t)
+
+    (define le-trap-handler
+      (case trap-handler
+        ((debug) debug-trap-handler)
+        ((pass) null-trap-handler)
+        ((disabled) #f)
+        (else (error "Unknown trap-handler strategy" trap-handler))))
+
     (catch #t
-      (lambda () (%start-stack #t thunk))
+      (lambda () 
+        (with-default-trap-handler le-trap-handler
+          (lambda () (%start-stack #t thunk))))
 
       (case post-error
         ((report)
@@ -56,16 +103,16 @@
                (apply throw key args)
                (begin
                  (pmatch args
-                  ((,subr ,msg ,args . ,rest)
-                   (with-saved-ports
-                    (lambda ()
-                      (run-hook before-error-hook)
-                      (display-error #f err subr msg args rest)
-                      (run-hook after-error-hook)
-                      (force-output err))))
-                  (else
-                   (format err "\nERROR: uncaught throw to `~a', args: ~a\n"
-                           key args)))
+                   ((,subr ,msg ,args . ,rest)
+                    (with-saved-ports
+                     (lambda ()
+                       (run-hook before-error-hook)
+                       (display-error #f err subr msg args rest)
+                       (run-hook after-error-hook)
+                       (force-output err))))
+                   (else
+                    (format err "\nERROR: uncaught throw to `~a', args: ~a\n"
+                            key args)))
                  (if #f #f)))))
         ((catch)
          (lambda (key . args)
@@ -73,9 +120,9 @@
                (apply throw key args))))
         (else
          (if (procedure? post-error)
-             post-error ; a handler proc
+             post-error                 ; a handler proc
              (error "Unknown post-error strategy" post-error))))
-    
+
       (case on-error
         ((debug)
          (lambda (key . args)
@@ -85,22 +132,18 @@
                           (make-stack #t)
                           ;; Cut three frames from the top of the stack:
                           ;; make-stack, this one, and the throw handler.
-                          3 
+                          3
                           ;; Narrow the end of the stack to the most recent
                           ;; start-stack.
                           tag
                           ;; And one more frame, because %start-stack invoking
                           ;; the start-stack thunk has its own frame too.
                           0 (and tag 1)))
-                  (debug (make-debug stack 0)))
+                  (error-msg (error-string stack key args))
+                  (debug (make-debug stack 0 error-msg)))
              (with-saved-ports
               (lambda ()
-                (pmatch args
-                  ((,subr ,msg ,args . ,rest)
-                   (display-error (vector-ref stack 0) (current-output-port)
-                                  subr msg args rest))
-                  (else
-                   (format #t "Throw to key `~a' with args `~s'." key args)))
+                (format #t error-msg)
                 (format #t "Entering a new prompt.  ")
                 (format #t "Type `,bt' for a backtrace or `,q' to continue.\n")
                 ((@ (system repl repl) start-repl) #:debug debug))))))
@@ -110,7 +153,7 @@
            #t))
         (else
          (if (procedure? on-error)
-             on-error ; pre-unwind handler
+             on-error                   ; pre-unwind handler
              (error "Unknown on-error strategy" on-error)))))))
 
 (define-syntax with-error-handling

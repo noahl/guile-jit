@@ -22,15 +22,15 @@
 #include <libguile.h>
 #include <libguile/programs.h>
 
-#define SCM_VM_BOOT_HOOK	0
-#define SCM_VM_HALT_HOOK	1
-#define SCM_VM_NEXT_HOOK	2
-#define SCM_VM_BREAK_HOOK	3
-#define SCM_VM_ENTER_HOOK	4
-#define SCM_VM_APPLY_HOOK	5
-#define SCM_VM_EXIT_HOOK	6
-#define SCM_VM_RETURN_HOOK	7
-#define SCM_VM_NUM_HOOKS	8
+enum {
+  SCM_VM_APPLY_HOOK,
+  SCM_VM_PUSH_CONTINUATION_HOOK,
+  SCM_VM_POP_CONTINUATION_HOOK,
+  SCM_VM_NEXT_HOOK,
+  SCM_VM_ABORT_CONTINUATION_HOOK,
+  SCM_VM_RESTORE_CONTINUATION_HOOK,
+  SCM_VM_NUM_HOOKS,
+};
 
 struct scm_vm;
 
@@ -49,7 +49,6 @@ struct scm_vm {
   SCM *stack_limit;		/* stack limit address */
   int engine;                   /* which vm engine we're using */
   SCM hooks[SCM_VM_NUM_HOOKS];	/* hooks */
-  SCM options;			/* options */
   int trace_level;              /* traces enabled if trace_level > 0 */
   scm_t_int64 cookie;           /* used to detect unrewindable continuations */
 };
@@ -62,29 +61,27 @@ SCM_API SCM scm_the_vm_fluid;
 
 SCM_API SCM scm_the_vm ();
 SCM_API SCM scm_make_vm (void);
-SCM_API SCM scm_vm_apply (SCM vm, SCM program, SCM args);
-SCM_API SCM scm_c_vm_run (SCM vm, SCM program, SCM *argv, int nargs);
-SCM_API SCM scm_vm_option_ref (SCM vm, SCM key);
-SCM_API SCM scm_vm_option_set_x (SCM vm, SCM key, SCM val);
 
-SCM_API SCM scm_vm_version (void);
 SCM_API SCM scm_the_vm (void);
+SCM_API SCM scm_call_with_vm (SCM vm, SCM proc, SCM args);
+
 SCM_API SCM scm_vm_p (SCM obj);
 SCM_API SCM scm_vm_ip (SCM vm);
 SCM_API SCM scm_vm_sp (SCM vm);
 SCM_API SCM scm_vm_fp (SCM vm);
-SCM_API SCM scm_vm_boot_hook (SCM vm);
-SCM_API SCM scm_vm_halt_hook (SCM vm);
-SCM_API SCM scm_vm_next_hook (SCM vm);
-SCM_API SCM scm_vm_break_hook (SCM vm);
-SCM_API SCM scm_vm_enter_hook (SCM vm);
 SCM_API SCM scm_vm_apply_hook (SCM vm);
-SCM_API SCM scm_vm_exit_hook (SCM vm);
-SCM_API SCM scm_vm_return_hook (SCM vm);
-SCM_API SCM scm_vm_option (SCM vm, SCM key);
-SCM_API SCM scm_set_vm_option_x (SCM vm, SCM key, SCM val);
+SCM_API SCM scm_vm_push_continuation_hook (SCM vm);
+SCM_API SCM scm_vm_pop_continuation_hook (SCM vm);
+SCM_API SCM scm_vm_abort_continuation_hook (SCM vm);
+SCM_API SCM scm_vm_restore_continuation_hook (SCM vm);
+SCM_API SCM scm_vm_next_hook (SCM vm);
 SCM_API SCM scm_vm_trace_level (SCM vm);
 SCM_API SCM scm_set_vm_trace_level_x (SCM vm, SCM level);
+SCM_API SCM scm_vm_engine (SCM vm);
+SCM_API SCM scm_set_vm_engine_x (SCM vm, SCM engine);
+SCM_API SCM scm_set_default_vm_engine_x (SCM engine);
+SCM_API void scm_c_set_vm_engine_x (SCM vm, int engine);
+SCM_API void scm_c_set_default_vm_engine_x (int engine);
 
 #define SCM_F_VM_CONT_PARTIAL 0x1
 #define SCM_F_VM_CONT_REWINDABLE 0x2
@@ -105,6 +102,8 @@ struct scm_vm_cont {
 #define SCM_VM_CONT_REWINDABLE_P(CONT) (SCM_VM_CONT_DATA (CONT)->flags & SCM_F_VM_CONT_REWINDABLE)
 
 SCM_API SCM scm_load_compiled_with_vm (SCM file);
+
+SCM_INTERNAL SCM scm_c_vm_run (SCM vm, SCM program, SCM *argv, int nargs);
 
 SCM_INTERNAL void scm_i_vm_print (SCM x, SCM port,
                                   scm_print_state *pstate);

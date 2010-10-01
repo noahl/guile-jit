@@ -24,7 +24,6 @@
 #endif
 
 #include <alloca.h>
-#include <assert.h>
 
 #include "libguile/__scm.h"
 
@@ -288,7 +287,7 @@ eval (SCM x, SCM env)
           goto loop;
         }
       else
-        return scm_vm_apply (scm_the_vm (), proc, args);
+        return scm_call_with_vm (scm_the_vm (), proc, args);
 
     case SCM_M_CALL:
       /* Evaluate the procedure to be applied.  */
@@ -323,7 +322,7 @@ eval (SCM x, SCM env)
 
         producer = eval (CAR (mx), env);
         proc = eval (CDR (mx), env);  /* proc is the consumer. */
-        v = scm_vm_apply (scm_the_vm (), producer, SCM_EOL);
+        v = scm_call_with_vm (scm_the_vm (), producer, SCM_EOL);
         if (SCM_VALUESP (v))
           args = scm_struct_ref (v, SCM_INUM0);
         else
@@ -435,115 +434,6 @@ eval (SCM x, SCM env)
       abort ();
     }
 }
-
-scm_t_option scm_eval_opts[] = {
-  { SCM_OPTION_INTEGER, "stack", 22000, "Size of thread stacks (in machine words)." },
-  { 0 }
-};
-
-scm_t_option scm_debug_opts[] = {
-  { SCM_OPTION_BOOLEAN, "cheap", 1,
-    "*This option is now obsolete.  Setting it has no effect." },
-  { SCM_OPTION_BOOLEAN, "breakpoints", 0, "*Check for breakpoints." },
-  { SCM_OPTION_BOOLEAN, "trace", 0, "*Trace mode." },
-  { SCM_OPTION_BOOLEAN, "procnames", 1,
-    "Record procedure names at definition." },
-  { SCM_OPTION_BOOLEAN, "backwards", 0,
-    "Display backtrace in anti-chronological order." },
-  { SCM_OPTION_INTEGER, "width", 79, "Maximal width of backtrace." },
-  { SCM_OPTION_INTEGER, "indent", 10, "Maximal indentation in backtrace." },
-  { SCM_OPTION_INTEGER, "frames", 3,
-    "Maximum number of tail-recursive frames in backtrace." },
-  { SCM_OPTION_INTEGER, "maxdepth", 1000,
-    "Maximal number of stored backtrace frames." },
-  { SCM_OPTION_INTEGER, "depth", 20, "Maximal length of printed backtrace." },
-  { SCM_OPTION_BOOLEAN, "backtrace", 0, "Show backtrace on error." },
-  { SCM_OPTION_BOOLEAN, "debug", 0, "Use the debugging evaluator." },
-  /* This default stack limit will be overridden by debug.c:init_stack_limit(),
-     if we have getrlimit() and the stack limit is not INFINITY. But it is still
-     important, as some systems have both the soft and the hard limits set to
-     INFINITY; in that case we fall back to this value.
-
-     The situation is aggravated by certain compilers, which can consume
-     "beaucoup de stack", as they say in France.
-
-     See http://thread.gmane.org/gmane.lisp.guile.devel/8599/focus=8662 for
-     more discussion. This setting is 640 KB on 32-bit arches (should be enough
-     for anyone!) or a whoppin' 1280 KB on 64-bit arches.
-  */
-  { SCM_OPTION_INTEGER, "stack", 160000, "Stack size limit (measured in words; 0 = no check)." },
-  { SCM_OPTION_SCM, "show-file-name", (unsigned long)SCM_BOOL_T,
-    "Show file names and line numbers "
-    "in backtraces when not `#f'.  A value of `base' "
-    "displays only base names, while `#t' displays full names."},
-  { SCM_OPTION_BOOLEAN, "warn-deprecated", 0,
-    "Warn when deprecated features are used." },
-  { 0 }, 
-};
-
-
-/*
- * this ordering is awkward and illogical, but we maintain it for
- * compatibility. --hwn
- */
-scm_t_option scm_evaluator_trap_table[] = {
-  { SCM_OPTION_BOOLEAN, "traps", 0, "Enable evaluator traps." },
-  { SCM_OPTION_BOOLEAN, "enter-frame", 0, "Trap when eval enters new frame." },
-  { SCM_OPTION_BOOLEAN, "apply-frame", 0, "Trap when entering apply." },
-  { SCM_OPTION_BOOLEAN, "exit-frame", 0, "Trap when exiting eval or apply." },
-  { SCM_OPTION_SCM, "enter-frame-handler", (unsigned long)SCM_BOOL_F, "Handler for enter-frame traps." },
-  { SCM_OPTION_SCM, "apply-frame-handler", (unsigned long)SCM_BOOL_F, "Handler for apply-frame traps." },
-  { SCM_OPTION_SCM, "exit-frame-handler", (unsigned long)SCM_BOOL_F, "Handler for exit-frame traps." },
-  { SCM_OPTION_BOOLEAN, "memoize-symbol", 0, "Trap when memoizing a symbol." },
-  { SCM_OPTION_SCM, "memoize-symbol-handler", (unsigned long)SCM_BOOL_F, "The handler for memoization." },
-  { 0 }
-};
-
-
-SCM_DEFINE (scm_eval_options_interface, "eval-options-interface", 0, 1, 0, 
-            (SCM setting),
-	    "Option interface for the evaluation options. Instead of using\n"
-	    "this procedure directly, use the procedures @code{eval-enable},\n"
-	    "@code{eval-disable}, @code{eval-set!} and @code{eval-options}.")
-#define FUNC_NAME s_scm_eval_options_interface
-{
-  SCM ans;
-  
-  scm_dynwind_begin (0);
-  scm_dynwind_critical_section (SCM_BOOL_F);
-  ans = scm_options (setting,
-		     scm_eval_opts,
-		     FUNC_NAME);
-  scm_dynwind_end ();
-
-  return ans;
-}
-#undef FUNC_NAME
-
-
-SCM_DEFINE (scm_evaluator_traps, "evaluator-traps-interface", 0, 1, 0, 
-            (SCM setting),
-	    "Option interface for the evaluator trap options.")
-#define FUNC_NAME s_scm_evaluator_traps
-{
-  SCM ans;
-
-  
-  scm_options_try (setting,
-		   scm_evaluator_trap_table,
-		   FUNC_NAME, 1);
-  SCM_CRITICAL_SECTION_START;
-  ans = scm_options (setting,
-		     scm_evaluator_trap_table,
-		     FUNC_NAME);
-
-  /* njrev: same again. */
-  SCM_CRITICAL_SECTION_END;
-  return ans;
-}
-#undef FUNC_NAME
-
-
 
 
 
@@ -905,7 +795,7 @@ scm_apply (SCM proc, SCM arg1, SCM args)
   else
     args = scm_cons_star (arg1, args);
 
-  return scm_vm_apply (scm_the_vm (), proc, args);
+  return scm_call_with_vm (scm_the_vm (), proc, args);
 }
 
 static void
@@ -1136,11 +1026,6 @@ scm_init_eval ()
 {
   SCM primitive_eval;
 
-  scm_init_opts (scm_evaluator_traps,
-		 scm_evaluator_trap_table);
-  scm_init_opts (scm_eval_options_interface,
-		 scm_eval_opts);
-  
   f_apply = scm_c_define_gsubr ("apply", 2, 0, 1, scm_apply);
 
   scm_tc16_boot_closure = scm_make_smob_type ("boot-closure", 0);

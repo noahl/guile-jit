@@ -10,13 +10,13 @@
 @cindex Debugging
 In order to understand Guile's debugging facilities, you first need to
 understand a little about how Guile represent the Scheme control stack.
-With that in place we explain the low level trap calls that the
-evaluator can be configured to make, and the trap and breakpoint
+With that in place we explain the low level trap calls that the virtual
+machine can be configured to make, and the trap and breakpoint
 infrastructure that builds on top of those calls.
 
 @menu
 * Evaluation Model::            Evaluation and the Scheme stack.
-* Debug on Error::              Debugging when an error occurs.
+* Programmatic Error Handling:: Debugging when an error occurs.
 * Traps::
 * Debugging Examples::
 @end menu
@@ -26,10 +26,10 @@ infrastructure that builds on top of those calls.
 
 The idea of the Scheme stack is central to a lot of debugging.  The
 Scheme stack is a reified representation of the pending function returns
-in an expression's continuation. As Guile implements function calls
+in an expression's continuation.  As Guile implements function calls
 using a stack, this reification takes the form of a number of nested
-stack frames, each of which has the procedure and its arguments, along
-with local variables and temporary values.
+stack frames, each of which corresponds to the application of a
+procedure to a set of arguments.
 
 A Scheme stack always exists implicitly, and can be summoned into
 concrete existence as a first-class Scheme value by the
@@ -53,10 +53,10 @@ function will not be on the stack, as it has no work left to do.
 Therefore, when an error occurs in a running program, or the program
 hits a breakpoint, or in fact at any point that the programmer chooses,
 its state at that point can be represented by a @dfn{stack} of all the
-evaluations and procedure applications that are logically in progress at
-that time, each of which is known as a @dfn{frame}.  The programmer can
-learn more about the program's state at that point by inspecting the
-stack and its frames.
+procedure applications that are logically in progress at that time, each
+of which is known as a @dfn{frame}.  The programmer can learn more about
+the program's state at that point by inspecting the stack and its
+frames.
 
 @menu
 * Capturing the Stack or Innermost Stack Frame::
@@ -76,7 +76,7 @@ describes the Scheme stack at that point.
 @lisp
 (make-stack #t)
 @result{}
-#<stack 805c840:808d250>
+#<stack 25205a0>
 @end lisp
 
 @deffn {Scheme Procedure} make-stack obj . args
@@ -206,23 +206,21 @@ can be seen by typing @code{(xxx)} and @code{xxx} at the Guile prompt
 (where the variable @code{xxx} has not been defined):
 
 @example
-guile> (xxx)
-standard input:2:1: In expression (xxx):
-standard input:2:1: Unbound variable: xxx
-ABORT: (unbound-variable)
-guile> xxx
-<unnamed port>: In expression xxx:
-<unnamed port>: Unbound variable: xxx
-ABORT: (unbound-variable)
+scheme@@(guile-user)> (xxx)
+<unnamed port>:4:1: In procedure module-lookup:
+<unnamed port>:4:1: Unbound variable: xxx
+
+scheme@@(guile-user)> xxx
+ERROR: In procedure module-lookup:
+ERROR: Unbound variable: xxx
 @end example
 
 @noindent
-In the latter case, no source properties were stored, so the best that
-Guile could say regarding the location of the problem was ``<unnamed
-port>''.
+In the latter case, no source properties were stored, so the error
+doesn't have any source information.
 
 The recording of source properties is controlled by the read option
-named ``positions'' (@pxref{Reader options}).  This option is switched
+named ``positions'' (@pxref{Scheme Read}).  This option is switched
 @emph{on} by default.
 
 The following procedures can be used to access and set the source
@@ -279,8 +277,23 @@ a convenience to the user.
 @end deffn
 
 
-@node Debug on Error
-@subsection Debugging when an error occurs
+@node Programmatic Error Handling
+@subsection Programmatic Error Handling
+
+For better or for worse, all programs have bugs, and dealing with bugs
+is part of programming. This section deals with that class of bugs that
+causes an exception to be raised -- from your own code, from within a
+library, or from Guile itself.
+
+@menu
+* Catching Exceptions::    Handling errors after the stack is unwound.
+* Capturing Stacks::       Capturing the stack at the time of error.
+* Pre-Unwind Debugging::   Debugging before the exception is thrown.
+* Debug Options::          A historical interface to debugging.
+@end menu
+
+@node Catching Exceptions
+@subsubsection Catching Exceptions
 
 A common requirement is to be able to show as much useful context as
 possible when a Scheme program hits an error.  The most immediate
@@ -291,8 +304,6 @@ the @code{error} or @code{throw} call (or their C code equivalents, if
 the error is detected by C code) that signals the error, and is passed
 automatically to the handler procedure of the innermost applicable
 @code{catch} or @code{with-throw-handler} expression.
-
-@subsubsection Intercepting basic error information
 
 Therefore, to catch errors that occur within a chunk of Scheme code, and
 to intercept basic information about those errors, you need to execute
@@ -313,12 +324,32 @@ this means you need something like this:
 @end lisp
 
 @noindent
-The @code{catch} here can also be @code{with-throw-handler}; see @ref{Throw
-Handlers} for information on the when you might want to use
-@code{with-throw-handler} instead of @code{catch}. The @code{#t} means that the
-catch is applicable to all kinds of error; if you want to restrict your catch to
-just one kind of error, you can put the symbol for that kind of error instead of
-@code{#t}. The equivalent to this in C would be something like this:
+The @code{catch} here can also be @code{with-throw-handler}; see
+@ref{Throw Handlers} for information on the when you might want to use
+@code{with-throw-handler} instead of @code{catch}.
+
+For example, to print out a message and return #f when an error occurs,
+you might use:
+
+@smalllisp
+(define (catch-all thunk)
+  (catch #t
+    thunk
+    (lambda (key . parameters)
+      (format (current-error-port)
+              "Uncaught throw to '~a: ~a\n" key parameters)
+      #f)))
+
+(catch-all
+ (lambda () (error "Not a vegetable: tomato")))
+@print{} Uncaught throw to 'misc-error: (#f ~A (Not a vegetable: tomato) #f)
+@result{} #f
+@end smalllisp
+
+The @code{#t} means that the catch is applicable to all kinds of error.
+If you want to restrict your catch to just one kind of error, you can
+put the symbol for that kind of error instead of @code{#t}. The
+equivalent to this in C would be something like this:
 
 @lisp
 SCM my_body_proc (void *body_data)
@@ -352,6 +383,7 @@ Again, as with the Scheme version, @code{scm_c_catch} could be replaced
 by @code{scm_c_with_throw_handler}, and @code{SCM_BOOL_T} could instead
 be the symbol for a particular kind of error.
 
+@node Capturing Stacks
 @subsubsection Capturing the full error stack
 
 The other interesting information about an error is the full Scheme
@@ -460,17 +492,6 @@ SCM my_preunwind_proc (void *handler_data,
 @}
 @end lisp
 
-@noindent
-Note that you don't have to wait until after the @code{catch} or
-@code{scm_c_catch} has returned.  You can also do whatever you like with
-the stack immediately after it has been captured in the pre-unwind
-handler, or in the normal (post-unwind) handler.  (Except that for the
-latter case in C you will need to change @code{handler_data} in the
-@code{scm_c_catch(@dots{})} call to @code{&captured_stack}, so that
-@code{my_handler_proc} has access to the captured stack.)
-
-@subsubsection Displaying or interrogating the captured stack
-
 Once you have a captured stack, you can interrogate and display its
 details in any way that you want, using the @code{stack-@dots{}} and
 @code{frame-@dots{}} API described in @ref{Examining the Stack} and
@@ -479,36 +500,182 @@ details in any way that you want, using the @code{stack-@dots{}} and
 If you want to print out a backtrace in the same format that the Guile
 REPL does, you can use the @code{display-backtrace} procedure to do so.
 You can also use @code{display-application} to display an individual
-application frame -- that is, a frame that satisfies the
-@code{frame-procedure?} predicate -- in the Guile REPL format.
+frame in the Guile REPL format.
 
-@subsubsection What the Guile REPL does
+@node Pre-Unwind Debugging
+@subsubsection Pre-Unwind Debugging
 
-The Guile REPL code (in @file{system/repl/repl.scm} and related files)
-uses a @code{catch} with a pre-unwind handler to capture the stack when
-an error occurs in an expression that was typed into the REPL, and saves
-the captured stack in a fluid (@pxref{Fluids and Dynamic States}) called
-@code{the-last-stack}. You can then use the @code{(backtrace)} command,
-which is basically equivalent to @code{(display-backtrace (fluid-ref
-the-last-stack))}, to print out this stack at any time until it is
-overwritten by the next error that occurs.
+Instead of saving a stack away and waiting for the @code{catch} to
+return, you can handle errors directly, from within the pre-unwind
+handler.
+
+For example, to show a backtrace when an error is thrown, you might want
+to use a procedure like this:
+
+@lisp
+(define (with-backtrace thunk)
+  (with-throw-handler #t
+                      thunk
+                      (lambda args (backtrace))))
+(with-backtrace (lambda () (error "Not a vegetable: tomato")))
+@end lisp
+
+Since we used @code{with-throw-handler} here, we didn't actually catch
+the error. @xref{Throw Handlers}, for more information. However, we did
+print out a context at the time of the error, using the built-in
+procedure, @code{backtrace}.
 
 @deffn {Scheme Procedure} backtrace [highlights]
 @deffnx {C Function} scm_backtrace_with_highlights (highlights)
 @deffnx {C Function} scm_backtrace ()
-Display a backtrace of the stack saved by the last error
-to the current output port.  If @var{highlights} is given
-it should be a list; the elements of this list will be
-highlighted wherever they appear in the backtrace.
+Display a backtrace of the current stack to the current output port.  If
+@var{highlights} is given it should be a list; the elements of this list
+will be highlighted wherever they appear in the backtrace.
 @end deffn
 
-You can also use the @code{(debug)} command to explore the saved stack
-using an interactive command-line-driven debugger.  See @ref{Interactive
-Debugging} for more information about this.
+The Guile REPL code (in @file{system/repl/repl.scm} and related files)
+uses a @code{catch} with a pre-unwind handler to capture the stack when
+an error occurs in an expression that was typed into the REPL, and debug
+that stack interactively in the context of the error.
 
-@deffn {Scheme Procedure} debug
-Invoke the Guile debugger to explore the context of the last error.
+These procedures are available for use by user programs, in the
+@code{(system repl error-handling)} module.
+
+@lisp
+(use-modules (system repl error-handling))
+@end lisp
+
+@deffn {Scheme Procedure} call-with-error-handling thunk @
+       [#:on-error on-error='debug] [#:post-error post-error='catch] @
+       [#:pass-keys pass-keys='(quit)] [#:trap-handler trap-handler='debug]
+Call a thunk in a context in which errors are handled.
+
+There are four keyword arguments:
+
+@table @var
+@item on-error
+Specifies what to do before the stack is unwound.
+
+Valid options are @code{debug} (the default), which will enter a
+debugger; @code{pass}, in which case nothing is done, and the exception
+is rethrown; or a procedure, which will be the pre-unwind handler.
+
+@item post-error
+Specifies what to do after the stack is unwound.
+
+Valid options are @code{catch} (the default), which will silently catch
+errors, returning the unspecified value; @code{report}, which prints out
+a description of the error (via @code{display-error}), and then returns
+the unspecified value; or a procedure, which will be the catch handler.
+
+@item trap-handler
+Specifies a trap handler: what to do when a breakpoint is hit.
+
+Valid options are @code{debug}, which will enter the debugger;
+@code{pass}, which does nothing; or @code{disabled}, which disables
+traps entirely.  @xref{Traps}, for more information.
+
+@item pass-keys
+A set of keys to ignore, as a list.
+@end table
 @end deffn
+
+@node Debug Options
+@subsubsection Debug options
+
+The behavior of the @code{backtrace} procedure and of the default error
+handler can be parameterized via the debug options.
+
+@cindex options - debug
+@cindex debug options
+@deffn {Scheme Procedure} debug-options [setting]
+Display the current settings of the debug options.  If @var{setting} is
+omitted, only a short form of the current read options is printed.
+Otherwise if @var{setting} is the symbol @code{help}, a complete options
+description is displayed.
+@end deffn
+
+The set of available options, and their default values, may be had by
+invoking @code{debug-options} at the prompt.
+
+@smallexample
+scheme@@(guile-user)>
+backwards       no      Display backtrace in anti-chronological order.
+width           79      Maximal width of backtrace.
+depth           20      Maximal length of printed backtrace.
+backtrace       yes     Show backtrace on error.
+stack           1048576 Stack size limit (measured in words;
+                        0 = no check). 
+show-file-name  #t      Show file names and line numbers in backtraces
+                        when not `#f'.  A value of `base' displays only
+                        base names, while `#t' displays full names. 
+warn-deprecated no      Warn when deprecated features are used.
+@end smallexample
+
+The boolean options may be toggled with @code{debug-enable} and
+@code{debug-disable}. The non-boolean @code{keywords} option must be set
+using @code{debug-set!}.
+
+@deffn {Scheme Procedure} debug-enable option-name
+@deffnx {Scheme Procedure} debug-disable option-name
+@deffnx {Scheme Procedure} debug-set! option-name value
+Modify the debug options.  @code{debug-enable} should be used with boolean
+options and switches them on, @code{debug-disable} switches them off.
+@code{debug-set!} can be used to set an option to a specific value.
+@end deffn
+
+@subsubheading Stack overflow
+
+@cindex overflow, stack
+@cindex stack overflow
+Stack overflow errors are caused by a computation trying to use more
+stack space than has been enabled by the @code{stack} option.  There are
+actually two kinds of stack that can overflow, the C stack and the
+Scheme stack.
+
+Scheme stack overflows can occur if Scheme procedures recurse too far
+deeply. An example would be the following recursive loop:
+
+@lisp
+scheme@@(guile-user)> (let lp () (+ 1 (lp)))
+<unnamed port>:8:17: In procedure vm-run:
+<unnamed port>:8:17: VM: Stack overflow
+@end lisp
+
+The default stack size should allow for about 10000 frames or so, so one
+usually doesn't hit this level of recursion. Unfortunately there is no
+way currently to make a VM with a bigger stack. If you are in this
+unfortunate situation, please file a bug, and in the meantime, rewrite
+your code to be tail-recursive (@pxref{Tail Calls}).
+
+The other limit you might hit would be C stack overflows. If you call a
+primitive procedure which then calls a Scheme procedure in a loop, you
+will consume C stack space. Guile tries to detect excessive consumption
+of C stack space, throwing an error when you have hit 80% of the
+process' available stack (as allocated by the operating system), or 160
+kilowords in the absence of a strict limit.
+
+For example, looping through @code{call-with-vm}, a primitive that calls
+a thunk, gives us the following:
+
+@lisp
+scheme@@(guile-user)> (use-modules (system vm vm))
+scheme@@(guile-user)> (debug-set! stack 10000)
+scheme@@(guile-user)> (let lp () (call-with-vm (the-vm) lp))
+ERROR: In procedure call-with-vm:
+ERROR: Stack overflow
+@end lisp
+
+If you get an error like this, you can either try rewriting your code to
+use less stack space, or increase the maximum stack size.  To increase
+the maximum stack size, use @code{debug-set!}, for example:
+
+@lisp
+(debug-set! stack 200000)
+@end lisp
+
+But of course it's better to have your code operate without so much
+resource consumption, avoiding loops through C trampolines.
 
 
 @node Traps

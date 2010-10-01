@@ -24,17 +24,13 @@ include $(top_srcdir)/am/guilec
 # We're at the root of the module hierarchy.
 modpath =
 
-BEGINNING_OF_TIME=198001010100
-
-$(GOBJECTS): ice-9/eval.go.stamp
-ice-9/eval.go.stamp: ice-9/eval.go
-	touch -t $(BEGINNING_OF_TIME) $(srcdir)/ice-9/eval.scm 
-	touch -r $(srcdir)/ice-9/eval.scm ice-9/eval.go
-	touch -r $(srcdir)/ice-9/eval.scm ice-9/eval.go.stamp
-CLEANFILES += ice-9/eval.go ice-9/eval.go.stamp
+# Build eval.go first.
+$(GOBJECTS): ice-9/eval.go
+CLEANFILES += ice-9/eval.go
 nobase_mod_DATA += ice-9/eval.scm
 nobase_ccache_DATA += ice-9/eval.go
 EXTRA_DIST += ice-9/eval.scm
+ETAGS_ARGS += ice-9/eval.scm
 
 # We can compile these in any order, but it's fastest if we compile
 # psyntax and boot-9 first, then the compiler itself, then the rest of
@@ -71,20 +67,22 @@ EXTRA_DIST +=					\
   ice-9/test.scm				\
   ice-9/compile-psyntax.scm			\
   ice-9/ChangeLog-2008
+ETAGS_ARGS +=					\
+  ice-9/test.scm				\
+  ice-9/compile-psyntax.scm			\
+  ice-9/ChangeLog-2008
 
 include $(top_srcdir)/am/pre-inst-guile
 ice-9/psyntax-pp.scm.gen:
 	$(preinstguile) --no-autocompile -s $(srcdir)/ice-9/compile-psyntax.scm \
 		$(srcdir)/ice-9/psyntax.scm $(srcdir)/ice-9/psyntax-pp.scm
-	touch -r "$(srcdir)/ice-9/psyntax.scm" "$(srcdir)/ice-9/psyntax-pp.scm"
 
 .PHONY: ice-9/psyntax-pp.scm.gen
 
-ice-9/psyntax-pp.go: ice-9/psyntax.scm
-	GUILE_AUTO_COMPILE=0					\
+ice-9/psyntax-pp.go: ice-9/psyntax.scm ice-9/psyntax-pp.scm
+	$(AM_V_GUILEC) GUILE_AUTO_COMPILE=0			\
 	$(top_builddir)/meta/uninstalled-env			\
 	guile-tools compile $(GUILE_WARNINGS) -o "ice-9/psyntax-pp.go" "$(srcdir)/ice-9/psyntax.scm"
-	touch -r "$(srcdir)/ice-9/psyntax.scm" "$(srcdir)/ice-9/psyntax-pp.scm"
 
 SCHEME_LANG_SOURCES =						\
   language/scheme/spec.scm					\
@@ -185,7 +183,6 @@ ICE_9_SOURCES = \
   ice-9/control.scm \
   ice-9/curried-definitions.scm \
   ice-9/debug.scm \
-  ice-9/debugger.scm \
   ice-9/documentation.scm \
   ice-9/expect.scm \
   ice-9/format.scm \
@@ -231,7 +228,6 @@ ICE_9_SOURCES = \
   ice-9/weak-vector.scm \
   ice-9/list.scm \
   ice-9/serialize.scm \
-  ice-9/gds-server.scm \
   ice-9/vlist.scm
 
 SRFI_SOURCES = \
@@ -252,6 +248,7 @@ SRFI_SOURCES = \
   srfi/srfi-18.scm \
   srfi/srfi-19.scm \
   srfi/srfi-26.scm \
+  srfi/srfi-27.scm \
   srfi/srfi-31.scm \
   srfi/srfi-34.scm \
   srfi/srfi-35.scm \
@@ -313,9 +310,10 @@ SYSTEM_SOURCES =				\
   system/vm/frame.scm				\
   system/vm/instruction.scm			\
   system/vm/objcode.scm				\
-  system/vm/profile.scm				\
   system/vm/program.scm				\
   system/vm/trace.scm				\
+  system/vm/traps.scm				\
+  system/vm/trap-state.scm			\
   system/vm/vm.scm				\
   system/foreign.scm				\
   system/xref.scm				\
@@ -347,23 +345,12 @@ LIB_SOURCES =					\
 EXTRA_DIST += oop/ChangeLog-2008
 
 NOCOMP_SOURCES =				\
-  ice-9/gds-client.scm				\
   ice-9/match.upstream.scm			\
   ice-9/psyntax.scm				\
   ice-9/r6rs-libraries.scm			\
   ice-9/quasisyntax.scm				\
   system/base/lalr.upstream.scm			\
   system/repl/describe.scm			\
-  ice-9/debugger/command-loop.scm		\
-  ice-9/debugger/commands.scm			\
-  ice-9/debugger/state.scm			\
-  ice-9/debugger/trc.scm			\
-  ice-9/debugger/utils.scm			\
-  ice-9/debugging/example-fns.scm		\
-  ice-9/debugging/steps.scm			\
-  ice-9/debugging/trace.scm			\
-  ice-9/debugging/traps.scm			\
-  ice-9/debugging/trc.scm			\
   sxml/sxml-match.ss				\
   sxml/upstream/SSAX.scm			\
   sxml/upstream/SXML-tree-trans.scm		\

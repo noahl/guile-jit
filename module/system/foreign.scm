@@ -42,7 +42,8 @@
             string->pointer
             pointer->string
 
-            make-foreign-function
+            pointer->procedure
+            ;; procedure->pointer (see below)
             make-c-struct parse-c-struct))
 
 (load-extension (string-append "libguile-" (effective-version))
@@ -57,6 +58,8 @@
   "Return true if POINTER is the null pointer."
   (= (pointer-address pointer) 0))
 
+(if (defined? 'procedure->pointer)
+    (export procedure->pointer))
 
 
 ;;;

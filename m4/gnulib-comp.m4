@@ -12,7 +12,8 @@
 # This file represents the compiled summary of the specification in
 # gnulib-cache.m4. It lists the computed macro invocations that need
 # to be invoked from configure.ac.
-# In projects using CVS, this file can be treated like other built files.
+# In projects that use version control, this file can be treated like
+# other built files.
 
 
 # This macro should be invoked from ./configure.ac, in the section
@@ -71,6 +72,11 @@ AC_DEFUN([gl_EARLY],
   # Code from module inet_ntop:
   # Code from module inet_pton:
   # Code from module inline:
+  # Code from module isinf:
+  # Code from module isnan:
+  # Code from module isnand:
+  # Code from module isnanf:
+  # Code from module isnanl:
   # Code from module lib-symbol-versions:
   # Code from module lib-symbol-visibility:
   # Code from module libunistring:
@@ -80,6 +86,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module maintainer-makefile:
   # Code from module malloc-posix:
   # Code from module malloca:
+  # Code from module math:
   # Code from module mbrlen:
   # Code from module mbrtowc:
   # Code from module mbsinit:
@@ -98,6 +105,7 @@ AC_DEFUN([gl_EARLY],
   # Code from module socklen:
   # Code from module ssize_t:
   # Code from module stat:
+  # Code from module stat-time:
   # Code from module stdarg:
   dnl Some compilers (e.g., AIX 5.3 cc) need to be in c99 mode
   dnl for the builtin va_copy to work.  With Autoconf 2.60 or later,
@@ -240,6 +248,21 @@ AC_DEFUN([gl_INIT],
   gl_ARPA_INET_MODULE_INDICATOR([inet_pton])
   # Code from module inline:
   gl_INLINE
+  # Code from module isinf:
+  gl_ISINF
+  gl_MATH_MODULE_INDICATOR([isinf])
+  # Code from module isnan:
+  gl_ISNAN
+  gl_MATH_MODULE_INDICATOR([isnan])
+  # Code from module isnand:
+  gl_FUNC_ISNAND
+  gl_MATH_MODULE_INDICATOR([isnand])
+  # Code from module isnanf:
+  gl_FUNC_ISNANF
+  gl_MATH_MODULE_INDICATOR([isnanf])
+  # Code from module isnanl:
+  gl_FUNC_ISNANL
+  gl_MATH_MODULE_INDICATOR([isnanl])
   # Code from module lib-symbol-versions:
   gl_LD_VERSION_SCRIPT
   # Code from module lib-symbol-visibility:
@@ -263,6 +286,8 @@ AC_DEFUN([gl_INIT],
   gl_STDLIB_MODULE_INDICATOR([malloc-posix])
   # Code from module malloca:
   gl_MALLOCA
+  # Code from module math:
+  gl_MATH_H
   # Code from module mbrlen:
   gl_FUNC_MBRLEN
   gl_WCHAR_MODULE_INDICATOR([mbrlen])
@@ -308,6 +333,9 @@ AC_DEFUN([gl_INIT],
   # Code from module stat:
   gl_FUNC_STAT
   gl_SYS_STAT_MODULE_INDICATOR([stat])
+  # Code from module stat-time:
+  gl_STAT_TIME
+  gl_STAT_BIRTHTIME
   # Code from module stdarg:
   gl_STDARG_H
   # Code from module stdbool:
@@ -577,6 +605,11 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/iconveh.h
   lib/inet_ntop.c
   lib/inet_pton.c
+  lib/isinf.c
+  lib/isnan.c
+  lib/isnand.c
+  lib/isnanf.c
+  lib/isnanl.c
   lib/libunistring.valgrind
   lib/localcharset.c
   lib/localcharset.h
@@ -586,6 +619,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/malloca.c
   lib/malloca.h
   lib/malloca.valgrind
+  lib/math.in.h
   lib/mbrlen.c
   lib/mbrtowc.c
   lib/mbsinit.c
@@ -608,6 +642,7 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/safe-write.h
   lib/size_max.h
   lib/snprintf.c
+  lib/stat-time.h
   lib/stat.c
   lib/stdarg.in.h
   lib/stdbool.in.h
@@ -659,6 +694,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/autobuild.m4
   m4/byteswap.m4
   m4/canonicalize.m4
+  m4/check-math-lib.m4
   m4/codeset.m4
   m4/dos.m4
   m4/double-slash-root.m4
@@ -666,6 +702,9 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/eealloc.m4
   m4/environ.m4
   m4/errno_h.m4
+  m4/exponentd.m4
+  m4/exponentf.m4
+  m4/exponentl.m4
   m4/extensions.m4
   m4/fcntl-o.m4
   m4/float_h.m4
@@ -685,6 +724,11 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/inline.m4
   m4/intmax_t.m4
   m4/inttypes_h.m4
+  m4/isinf.m4
+  m4/isnan.m4
+  m4/isnand.m4
+  m4/isnanf.m4
+  m4/isnanl.m4
   m4/ld-version-script.m4
   m4/lib-ld.m4
   m4/lib-link.m4
@@ -700,6 +744,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/lstat.m4
   m4/malloc.m4
   m4/malloca.m4
+  m4/math_h.m4
   m4/mbrlen.m4
   m4/mbrtowc.m4
   m4/mbsinit.m4
@@ -721,6 +766,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/socklen.m4
   m4/sockpfaf.m4
   m4/ssize_t.m4
+  m4/stat-time.m4
   m4/stat.m4
   m4/stdarg.m4
   m4/stdbool.m4

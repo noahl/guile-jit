@@ -125,7 +125,7 @@
 ;; pattern so far.
 
 (define-syntax match-two
-  (syntax-rules (_ ___ *** quote quasiquote ? $ = and or not set! get!)
+  (syntax-rules (_ ___ ..1 *** quote quasiquote ? $ = and or not set! get!)
     ((match-two v () g+s (sk ...) fk i)
      (if (null? v) (sk ... i) fk))
     ((match-two v (quote p) g+s (sk ...) fk i)
@@ -161,6 +161,10 @@
      (match-extract-vars p (match-gen-search v p q g+s sk fk i) i ()))
     ((match-two v (p *** . q) g+s sk fk i)
      (match-syntax-error "invalid use of ***" (p *** . q)))
+    ((match-two v (p ..1) g+s sk fk i)
+     (if (pair? v)
+         (match-one v (p ___) g+s sk fk i)
+         fk))
     ((match-two v (p . q) g+s sk fk i)
      (if (pair? v)
          (let ((w (car v)) (x (cdr v)))
@@ -484,7 +488,7 @@
 ;; (match-extract-vars pattern continuation (ids ...) (new-vars ...))
 
 (define-syntax match-extract-vars
-  (syntax-rules (_ ___ *** ? $ = quote quasiquote and or not get! set!)
+  (syntax-rules (_ ___ ..1 *** ? $ = quote quasiquote and or not get! set!)
     ((match-extract-vars (? pred . p) . x)
      (match-extract-vars p . x))
     ((match-extract-vars ($ rec . p) . x)
@@ -514,6 +518,7 @@
      (match-extract-vars (p ...) . x))
     ((match-extract-vars _ (k ...) i v)    (k ... v))
     ((match-extract-vars ___ (k ...) i v)  (k ... v))
+    ((match-extract-vars ..1 (k ...) i v)  (k ... v))
     ((match-extract-vars *** (k ...) i v)  (k ... v))
     ;; This is the main part, the only place where we might add a new
     ;; var if it's an unbound symbol.

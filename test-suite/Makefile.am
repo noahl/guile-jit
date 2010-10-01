@@ -28,6 +28,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/arrays.test			\
 	    tests/asm-to-bytecode.test		\
 	    tests/bit-operations.test		\
+	    tests/bitvectors.test		\
 	    tests/brainfuck.test		\
 	    tests/bytevectors.test		\
 	    tests/c-api.test			\
@@ -72,6 +73,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/procprop.test			\
 	    tests/poe.test			\
 	    tests/popen.test			\
+	    tests/popen-child.scm		\
 	    tests/ports.test			\
 	    tests/posix.test			\
 	    tests/q.test			\
@@ -99,6 +101,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/reader.test			\
 	    tests/receive.test			\
 	    tests/regexp.test			\
+	    tests/session.test			\
 	    tests/signals.test			\
 	    tests/socket.test			\
 	    tests/srcprop.test			\
@@ -110,6 +113,7 @@ SCM_TESTS = tests/00-initial-env.test		\
 	    tests/srfi-14.test			\
 	    tests/srfi-19.test			\
 	    tests/srfi-26.test			\
+	    tests/srfi-27.test			\
 	    tests/srfi-31.test			\
 	    tests/srfi-34.test			\
 	    tests/srfi-35.test			\

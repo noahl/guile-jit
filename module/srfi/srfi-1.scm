@@ -220,7 +220,8 @@
 
 ;; Load the compiled primitives from the shared library.
 ;;
-(load-extension "libguile-srfi-srfi-1-v-4" "scm_init_srfi_1")
+(load-extension (string-append "libguile-" (effective-version))
+                "scm_init_srfi_1")
 
 
 ;;; Constructors
@@ -336,6 +337,12 @@ end-of-list checking in contexts where dotted lists are allowed."
 (define second cadr)
 (define third caddr)
 (define fourth cadddr)
+(define (fifth x) (car (cddddr x)))
+(define (sixth x) (cadr (cddddr x)))
+(define (seventh x) (caddr (cddddr x)))
+(define (eighth x) (cadddr (cddddr x)))
+(define (ninth x) (car (cddddr (cddddr x))))
+(define (tenth x) (cadr (cddddr (cddddr x))))
 
 (define (car+cdr x)
   "Return two values, the `car' and the `cdr' of PAIR."
@@ -343,6 +350,30 @@ end-of-list checking in contexts where dotted lists are allowed."
 
 (define take list-head)
 (define drop list-tail)
+
+(define (take! lst i)
+  "Linear-update variant of `take'."
+  (if (= i 0)
+      '()
+      (let ((tail (drop lst (- i 1))))
+        (set-cdr! tail '())
+        lst)))
+
+(define (drop-right! lst i)
+  "Linear-update variant of `drop-right'."
+  (let ((tail (drop lst i)))
+    (if (null? tail)
+        '()
+        (let loop ((prev lst)
+                   (tail (cdr tail)))
+          (if (null? tail)
+              (if (pair? prev)
+                  (begin
+                    (set-cdr! prev '())
+                    lst)
+                  lst)
+              (loop (cdr prev)
+                    (cdr tail)))))))
 
 (define (last pair)
   "Return the last element of the non-empty, finite list PAIR."
@@ -435,6 +466,24 @@ that result.  See the manual for details."
         lis
         (uf (g seed) (cons (f seed) lis)))))
 
+(define (reduce f ridentity lst)
+  "`reduce' is a variant of `fold', where the first call to F is on two
+elements from LST, rather than one element and a given initial value.
+If LST is empty, RIDENTITY is returned.  If LST has just one element
+then that's the return value."
+  (if (null? lst)
+      ridentity
+      (fold f (car lst) (cdr lst))))
+
+(define (reduce-right f ridentity lst)
+  "`reduce-right' is a variant of `fold-right', where the first call to
+F is on two elements from LST, rather than one element and a given
+initial value.  If LST is empty, RIDENTITY is returned.  If LST
+has just one element then that's the return value."
+  (if (null? lst)
+      ridentity
+      (fold-right f (last lst) (drop-right lst 1))))
+
 
 ;; Internal helper procedure.  Map `f' over the single list `ls'.
 ;;
@@ -464,7 +513,95 @@ that result.  See the manual for details."
 	  (apply f l)
 	  (lp (map1 cdr l)))))))
 
+
 ;;; Searching
+
+(define (take-while pred ls)
+  "Return a new list which is the longest initial prefix of LS whose
+elements all satisfy the predicate PRED."
+  (cond ((null? ls) '())
+        ((not (pred (car ls))) '())
+        (else
+         (let ((result (list (car ls))))
+           (let lp ((ls (cdr ls)) (p result))
+             (cond ((null? ls) result)
+                   ((not (pred (car ls))) result)
+                   (else
+                    (set-cdr! p (list (car ls)))
+                    (lp (cdr ls) (cdr p)))))))))
+
+(define (take-while! pred lst)
+  "Linear-update variant of `take-while'."
+  (let loop ((prev #f)
+             (rest lst))
+    (cond ((null? rest)
+           lst)
+          ((pred (car rest))
+           (loop rest (cdr rest)))
+          (else
+           (if (pair? prev)
+               (begin
+                 (set-cdr! prev '())
+                 lst)
+               '())))))
+
+(define (drop-while pred lst)
+  "Drop the longest initial prefix of LST whose elements all satisfy the
+predicate PRED."
+  (let loop ((lst lst))
+    (cond ((null? lst)
+           '())
+          ((pred (car lst))
+           (loop (cdr lst)))
+          (else lst))))
+
+(define (span pred lst)
+  "Return two values, the longest initial prefix of LST whose elements
+all satisfy the predicate PRED, and the remainder of LST."
+  (let lp ((lst lst) (rl '()))
+    (if (and (not (null? lst))
+             (pred (car lst)))
+        (lp (cdr lst) (cons (car lst) rl))
+        (values (reverse! rl) lst))))
+
+(define (span! pred list)
+  "Linear-update variant of `span'."
+  (let loop ((prev #f)
+             (rest list))
+    (cond ((null? rest)
+           (values list '()))
+          ((pred (car rest))
+           (loop rest (cdr rest)))
+          (else
+           (if (pair? prev)
+               (begin
+                 (set-cdr! prev '())
+                 (values list rest))
+               (values '() list))))))
+
+(define (break pred clist)
+  "Return two values, the longest initial prefix of LST whose elements
+all fail the predicate PRED, and the remainder of LST."
+  (let lp ((clist clist) (rl '()))
+    (if (or (null? clist)
+	    (pred (car clist)))
+	(values (reverse! rl) clist)
+	(lp (cdr clist) (cons (car clist) rl)))))
+
+(define (break! pred list)
+  "Linear-update variant of `break'."
+  (let loop ((l    list)
+             (prev #f))
+    (cond ((null? l)
+           (values list '()))
+          ((pred (car l))
+           (if (pair? prev)
+               (begin
+                 (set-cdr! prev '())
+                 (values list l))
+               (values '() list)))
+          (else
+           (loop (cdr l) l)))))
 
 (define (any pred ls . lists)
   (if (null? lists)
@@ -527,6 +664,15 @@ CLIST1 ... CLISTN, that satisfies PRED."
 
 (define alist-cons acons)
 
+(define (alist-copy alist)
+  "Return a copy of ALIST, copying both the pairs comprising the list
+and those making the associations."
+  (let lp ((a  alist)
+           (rl '()))
+    (if (null? a)
+        (reverse! rl)
+        (lp (cdr a) (alist-cons (caar a) (cdar a) rl)))))
+
 (define* (alist-delete key alist #:optional (k= equal?))
   (let lp ((a alist) (rl '()))
     (if (null? a)
@@ -556,6 +702,27 @@ CLIST1 ... CLISTN, that satisfies PRED."
 	  (and (every (lambda (el) (member el (car r) =)) f)
 	       (every (lambda (el) (member el f (lambda (x y) (= y x)))) (car r))
 	       (lp (car r) (cdr r)))))))
+
+;; It's not quite clear if duplicates among the `rest' elements are meant to
+;; be cast out.  The spec says `=' is called as (= lstelem restelem),
+;; suggesting perhaps not, but the reference implementation shows the "list"
+;; at each stage as including those elements already added.  The latter
+;; corresponds to what's described for lset-union, so that's what's done.
+;;
+(define (lset-adjoin = list . rest)
+  "Add to LIST any of the elements of REST not already in the list.
+These elements are `cons'ed onto the start of LIST (so the return shares
+a common tail with LIST), but the order they're added is unspecified.
+
+The given `=' procedure is used for comparing elements, called
+as `(@var{=} listelem elem)', i.e., the second argument is one of the
+given REST parameters."
+  (let lp ((l rest) (acc list))
+    (if (null? l)
+        acc
+        (if (member (car l) acc (lambda (x y) (= y x)))
+            (lp (cdr l) acc)
+            (lp (cdr l) (cons (car l) acc))))))
 
 (define (lset-union = . rest)
   (let ((acc '()))

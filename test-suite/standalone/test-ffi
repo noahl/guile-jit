@@ -1,9 +1,28 @@
 #!/bin/sh
 exec guile -q -s "$0" "$@"
 !#
+;;; test-ffi --- Foreign function interface.         -*- Scheme -*-
+;;;
+;;; Copyright (C) 2010 Free Software Foundation, Inc.
+;;;
+;;; This library is free software; you can redistribute it and/or
+;;; modify it under the terms of the GNU Lesser General Public
+;;; License as published by the Free Software Foundation; either
+;;; version 3 of the License, or (at your option) any later version.
+;;;
+;;; This library is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;;; Lesser General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU Lesser General Public
+;;; License along with this library; if not, write to the Free Software
+;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 (use-modules (system foreign)
-             (rnrs bytevectors))
+             (rnrs bytevectors)
+             (srfi srfi-1)
+             (srfi srfi-26))
 
 (define lib
   (dynamic-link (string-append (getenv "builddir") "/libtest-ffi")))
@@ -26,78 +45,78 @@ exec guile -q -s "$0" "$@"
 ;;; No args
 ;;;
 (define f-v-
-  (make-foreign-function void (dynamic-func "test_ffi_v_" lib) '()))
+  (pointer->procedure void (dynamic-func "test_ffi_v_" lib) '()))
 (test (f-v-) *unspecified*)
 
 (define f-s8-
-  (make-foreign-function int8 (dynamic-func "test_ffi_s8_" lib) '()))
+  (pointer->procedure int8 (dynamic-func "test_ffi_s8_" lib) '()))
 (test (f-s8-) -100)
 
 (define f-u8-
-  (make-foreign-function uint8 (dynamic-func "test_ffi_u8_" lib) '()))
+  (pointer->procedure uint8 (dynamic-func "test_ffi_u8_" lib) '()))
 (test (f-u8-) 200)
 
 (define f-s16-
-  (make-foreign-function int16 (dynamic-func "test_ffi_s16_" lib) '()))
+  (pointer->procedure int16 (dynamic-func "test_ffi_s16_" lib) '()))
 (test (f-s16-) -20000)
 
 (define f-u16-
-  (make-foreign-function uint16 (dynamic-func "test_ffi_u16_" lib) '()))
+  (pointer->procedure uint16 (dynamic-func "test_ffi_u16_" lib) '()))
 (test (f-u16-) 40000)
 
 (define f-s32-
-  (make-foreign-function int32 (dynamic-func "test_ffi_s32_" lib) '()))
+  (pointer->procedure int32 (dynamic-func "test_ffi_s32_" lib) '()))
 (test (f-s32-) -2000000000)
 
 (define f-u32-
-  (make-foreign-function uint32 (dynamic-func "test_ffi_u32_" lib) '()))
+  (pointer->procedure uint32 (dynamic-func "test_ffi_u32_" lib) '()))
 (test (f-u32-) 4000000000)
 
 (define f-s64-
-  (make-foreign-function int64 (dynamic-func "test_ffi_s64_" lib) '()))
+  (pointer->procedure int64 (dynamic-func "test_ffi_s64_" lib) '()))
 (test (f-s64-) -2000000000)
 
 (define f-u64-
-  (make-foreign-function uint64 (dynamic-func "test_ffi_u64_" lib) '()))
+  (pointer->procedure uint64 (dynamic-func "test_ffi_u64_" lib) '()))
 (test (f-u64-) 4000000000)
 
 ;;;
 ;;; One u8 arg
 ;;;
 (define f-v-u8
-  (make-foreign-function void (dynamic-func "test_ffi_v_u8" lib) (list uint8)))
+  (pointer->procedure void (dynamic-func "test_ffi_v_u8" lib) (list uint8)))
 (test (f-v-u8 10) *unspecified*)
 
 (define f-s8-u8
-  (make-foreign-function int8 (dynamic-func "test_ffi_s8_u8" lib) (list uint8)))
+  (pointer->procedure int8 (dynamic-func "test_ffi_s8_u8" lib) (list uint8)))
 (test (f-s8-u8 10) -90)
 
 (define f-u8-u8
-  (make-foreign-function uint8 (dynamic-func "test_ffi_u8_u8" lib) (list uint8)))
+  (pointer->procedure uint8 (dynamic-func "test_ffi_u8_u8" lib) (list uint8)))
 (test (f-u8-u8 10) 210)
 
 (define f-s16-u8
-  (make-foreign-function int16 (dynamic-func "test_ffi_s16_u8" lib) (list uint8)))
+  (pointer->procedure int16 (dynamic-func "test_ffi_s16_u8" lib) (list uint8)))
 (test (f-s16-u8 10) -19990)
 
 (define f-u16-u8
-  (make-foreign-function uint16 (dynamic-func "test_ffi_u16_u8" lib) (list uint8)))
+  (pointer->procedure uint16 (dynamic-func "test_ffi_u16_u8" lib) (list uint8)))
 (test (f-u16-u8 10) 40010)
 
 (define f-s32-u8
-  (make-foreign-function int32 (dynamic-func "test_ffi_s32_u8" lib) (list uint8)))
+  (pointer->procedure int32 (dynamic-func "test_ffi_s32_u8" lib) (list uint8)))
 (test (f-s32-u8 10) -1999999990)
 
 (define f-u32-u8
-  (make-foreign-function uint32 (dynamic-func "test_ffi_u32_u8" lib) (list uint8)))
+  (pointer->procedure uint32 (dynamic-func "test_ffi_u32_u8" lib) (list uint8)))
 (test (f-u32-u8 10) 4000000010)
 
 (define f-s64-u8
-  (make-foreign-function int64 (dynamic-func "test_ffi_s64_u8" lib) (list uint8)))
+  (pointer->procedure int64 (dynamic-func "test_ffi_s64_u8" lib) (list uint8)))
 (test (f-s64-u8 10) -1999999990)
 
 (define f-u64-u8
-  (make-foreign-function uint64 (dynamic-func "test_ffi_u64_u8" lib) (list uint8)))
+  (pointer->procedure uint64 (dynamic-func "test_ffi_u64_u8" lib) (list uint8)))
 (test (f-u64-u8 10) 4000000010)
 
 
@@ -105,39 +124,39 @@ exec guile -q -s "$0" "$@"
 ;;; One s64 arg
 ;;;
 (define f-v-s64
-  (make-foreign-function void (dynamic-func "test_ffi_v_s64" lib) (list int64)))
+  (pointer->procedure void (dynamic-func "test_ffi_v_s64" lib) (list int64)))
 (test (f-v-s64 10) *unspecified*)
 
 (define f-s8-s64
-  (make-foreign-function int8 (dynamic-func "test_ffi_s8_s64" lib) (list int64)))
+  (pointer->procedure int8 (dynamic-func "test_ffi_s8_s64" lib) (list int64)))
 (test (f-s8-s64 10) -90)
 
 (define f-u8-s64
-  (make-foreign-function uint8 (dynamic-func "test_ffi_u8_s64" lib) (list int64)))
+  (pointer->procedure uint8 (dynamic-func "test_ffi_u8_s64" lib) (list int64)))
 (test (f-u8-s64 10) 210)
 
 (define f-s16-s64
-  (make-foreign-function int16 (dynamic-func "test_ffi_s16_s64" lib) (list int64)))
+  (pointer->procedure int16 (dynamic-func "test_ffi_s16_s64" lib) (list int64)))
 (test (f-s16-s64 10) -19990)
 
 (define f-u16-s64
-  (make-foreign-function uint16 (dynamic-func "test_ffi_u16_s64" lib) (list int64)))
+  (pointer->procedure uint16 (dynamic-func "test_ffi_u16_s64" lib) (list int64)))
 (test (f-u16-s64 10) 40010)
 
 (define f-s32-s64
-  (make-foreign-function int32 (dynamic-func "test_ffi_s32_s64" lib) (list int64)))
+  (pointer->procedure int32 (dynamic-func "test_ffi_s32_s64" lib) (list int64)))
 (test (f-s32-s64 10) -1999999990)
 
 (define f-u32-s64
-  (make-foreign-function uint32 (dynamic-func "test_ffi_u32_s64" lib) (list int64)))
+  (pointer->procedure uint32 (dynamic-func "test_ffi_u32_s64" lib) (list int64)))
 (test (f-u32-s64 10) 4000000010)
 
 (define f-s64-s64
-  (make-foreign-function int64 (dynamic-func "test_ffi_s64_s64" lib) (list int64)))
+  (pointer->procedure int64 (dynamic-func "test_ffi_s64_s64" lib) (list int64)))
 (test (f-s64-s64 10) -1999999990)
 
 (define f-u64-s64
-  (make-foreign-function uint64 (dynamic-func "test_ffi_u64_s64" lib) (list int64)))
+  (pointer->procedure uint64 (dynamic-func "test_ffi_u64_s64" lib) (list int64)))
 (test (f-u64-s64 10) 4000000010)
 
 
@@ -145,8 +164,8 @@ exec guile -q -s "$0" "$@"
 ;; Multiple int args of differing types
 ;;
 (define f-sum
-  (make-foreign-function int64 (dynamic-func "test_ffi_sum" lib)
-                         (list int8 int16 int32 int64)))
+  (pointer->procedure int64 (dynamic-func "test_ffi_sum" lib)
+                      (list int8 int16 int32 int64)))
 (test (f-sum -1 2000 -30000 40000000000)
       (+ -1 2000 -30000 40000000000))
 
@@ -154,8 +173,8 @@ exec guile -q -s "$0" "$@"
 ;; Structs
 ;;
 (define f-sum-struct
-  (make-foreign-function int64 (dynamic-func "test_ffi_sum_struct" lib)
-                         (list (list int8 int16 int32 int64))))
+  (pointer->procedure int64 (dynamic-func "test_ffi_sum_struct" lib)
+                      (list (list int8 int16 int32 int64))))
 (test (f-sum-struct (make-c-struct (list int8 int16 int32 int64)
                                    (list -1 2000 -30000 40000000000)))
       (+ -1 2000 -30000 40000000000))
@@ -163,8 +182,8 @@ exec guile -q -s "$0" "$@"
 ;; Structs
 ;;
 (define f-memcpy
-  (make-foreign-function '* (dynamic-func "test_ffi_memcpy" lib)
-                         (list '* '* int32)))
+  (pointer->procedure '* (dynamic-func "test_ffi_memcpy" lib)
+                      (list '* '* int32)))
 (let* ((src* '(0 1 2 3 4 5 6 7))
        (src  (bytevector->pointer (u8-list->bytevector src*)))
        (dest (bytevector->pointer (make-bytevector 16 0)))
@@ -174,6 +193,50 @@ exec guile -q -s "$0" "$@"
   (or (equal? (bytevector->u8-list (pointer->bytevector dest 16))
               '(0 1 2 3 4 5 6 7 0 0 0 0 0 0 0 0))
       (error "unexpected dest")))
+
+;;
+;; Function pointers
+;;
+
+(define f-callback-1
+  (pointer->procedure int (dynamic-func "test_ffi_callback_1" lib)
+                      (list '* int)))
+
+(if (defined? 'procedure->pointer)
+    (let* ((calls 0)
+           (ptr   (procedure->pointer int
+                                      (lambda (x)
+                                        (set! calls (+ 1 calls))
+                                        (* x 3))
+                                      (list int)))
+           (input (iota 123)))
+      (define (expected-result x)
+        (+ 7 (* x 3)))
+
+      (let ((result (map (cut f-callback-1 ptr <>) input)))
+        (and (or (= calls (length input))
+                 (error "incorrect number of callback calls" calls))
+             (or (equal? (map expected-result input) result)
+                 (error "incorrect result" result))))))
+
+(define f-callback-2
+  (pointer->procedure double (dynamic-func "test_ffi_callback_2" lib)
+                      (list '* float int double)))
+
+(if (defined? 'procedure->pointer)
+    (let* ((proc  (lambda (x y z)
+                    (* (+ x (exact->inexact y)) z)))
+           (ptr   (procedure->pointer double proc
+                                      (list float int double)))
+           (arg1 (map (cut * <> 1.25) (iota 123 500)))
+           (arg2 (iota 123))
+           (arg3 (map (cut / <> 2.0) (iota 123 0 -10))))
+      (define result
+        (map (cut f-callback-2 ptr <> <> <>)
+             arg1 arg2 arg3))
+
+      (or (equal? result (map proc arg1 arg2 arg3))
+          (error "incorrect result" result))))
 
 
 ;;;
@@ -188,12 +251,12 @@ exec guile -q -s "$0" "$@"
 (define global (dynamic-link))
 
 (define strerror
-  (make-foreign-function '* (dynamic-func "strerror" global)
-                         (list int)))
+  (pointer->procedure '* (dynamic-func "strerror" global)
+                      (list int)))
 
 (define strlen
-  (make-foreign-function size_t (dynamic-func "strlen" global)
-                         (list '*)))
+  (pointer->procedure size_t (dynamic-func "strlen" global)
+                      (list '*)))
 
 (let* ((ptr (strerror ENOENT))
        (len (strlen ptr))

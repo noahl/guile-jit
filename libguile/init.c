@@ -25,6 +25,7 @@
 #  include <config.h>
 #endif
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -114,8 +115,11 @@
 #include "libguile/stacks.h"
 #include "libguile/stime.h"
 #include "libguile/strings.h"
+#include "libguile/srfi-1.h"
+#include "libguile/srfi-4.h"
 #include "libguile/srfi-13.h"
 #include "libguile/srfi-14.h"
+#include "libguile/srfi-60.h"
 #include "libguile/strorder.h"
 #include "libguile/strports.h"
 #include "libguile/struct.h"
@@ -134,7 +138,6 @@
 #include "libguile/guardians.h"
 #include "libguile/extensions.h"
 #include "libguile/uniform.h"
-#include "libguile/srfi-4.h"
 #include "libguile/deprecated.h"
 
 #include "libguile/init.h"
@@ -161,7 +164,7 @@ fixconfig (char *s1, char *s2, int s)
   fputs ("\nin ", stderr);
   fputs (s ? "setjump" : "scmfig", stderr);
   fputs (".h and recompile scm\n", stderr);
-  exit (1);
+  exit (EXIT_FAILURE);
 }
 
 
@@ -327,8 +330,8 @@ static void *invoke_main_func(void *body_data);
    Call MAIN_FUNC, passing it CLOSURE, ARGC, and ARGV.  MAIN_FUNC
    should do all the work of the program (initializing other packages,
    reading user input, etc.) before returning.  When MAIN_FUNC
-   returns, call exit (0); this function never returns.  If you want
-   some other exit value, MAIN_FUNC may call exit itself.
+   returns, call exit (EXIT_FAILURE); this function never returns.
+   If you want some other exit value, MAIN_FUNC may call exit itself.
 
    scm_boot_guile arranges for program-arguments to return the strings
    given by ARGC and ARGV.  If MAIN_FUNC modifies ARGC/ARGV, should
@@ -369,7 +372,7 @@ scm_boot_guile (int argc, char ** argv, void (*main_func) (), void *closure)
   if (res == NULL)
     exit (EXIT_FAILURE);
   else
-    exit (0);
+    exit (EXIT_SUCCESS);
 }
 
 static void *
@@ -454,6 +457,8 @@ scm_i_init_guile (SCM_STACKITEM *base)
   scm_bootstrap_programs ();
   scm_bootstrap_vm ();
   scm_register_foreign ();
+  scm_register_srfi_1 ();
+  scm_register_srfi_60 ();
 
   scm_init_strings ();            /* Requires array-handle */
   scm_init_struct ();             /* Requires strings */

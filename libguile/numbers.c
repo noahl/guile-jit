@@ -60,6 +60,7 @@
 #include "libguile/root.h"
 #include "libguile/smob.h"
 #include "libguile/strings.h"
+#include "libguile/bdw-gc.h"
 
 #include "libguile/validate.h"
 #include "libguile/numbers.h"
@@ -105,26 +106,6 @@ static SCM flo0;
  */
 #define FLOBUFLEN (40+2*(sizeof(double)/sizeof(char)*SCM_CHAR_BIT*3+9)/10)
 
-#if defined (SCO)
-#if ! defined (HAVE_ISNAN)
-#define HAVE_ISNAN
-static int
-isnan (double x)
-{
-  return (IsNANorINF (x) && NaN (x) && ! IsINF (x)) ? 1 : 0;
-}
-#endif
-#if ! defined (HAVE_ISINF)
-#define HAVE_ISINF
-static int
-isinf (double x)
-{
-  return (IsNANorINF (x) && IsINF (x)) ? 1 : 0;
-}
-
-#endif
-#endif
-
 
 #if !defined (HAVE_ASINH)
 static double asinh (double x) { return log (x + sqrt (x * x + 1)); }
@@ -141,35 +122,11 @@ static double atanh (double x) { return 0.5 * log ((1 + x) / (1 - x)); }
    mpz_cmp_d is supposed to do this itself.  */
 #if 1
 #define xmpz_cmp_d(z, d)                                \
-  (xisinf (d) ? (d < 0.0 ? 1 : -1) : mpz_cmp_d (z, d))
+  (isinf (d) ? (d < 0.0 ? 1 : -1) : mpz_cmp_d (z, d))
 #else
 #define xmpz_cmp_d(z, d)  mpz_cmp_d (z, d)
 #endif
 
-/* For reference, sparc solaris 7 has infinities (IEEE) but doesn't have
-   isinf.  It does have finite and isnan though, hence the use of those.
-   fpclass would be a possibility on that system too.  */
-static int
-xisinf (double x)
-{
-#if defined (HAVE_ISINF)
-  return isinf (x);
-#elif defined (HAVE_FINITE) && defined (HAVE_ISNAN)
-  return (! (finite (x) || isnan (x)));
-#else
-  return 0;
-#endif
-}
-
-static int
-xisnan (double x)
-{
-#if defined (HAVE_ISNAN)
-  return isnan (x);
-#else
-  return 0;
-#endif
-}
 
 #if defined (GUILE_I)
 #if HAVE_COMPLEX_DOUBLE
@@ -196,12 +153,42 @@ scm_from_complex_double (complex double z)
 static mpz_t z_negative_one;
 
 
+/* Clear the `mpz_t' embedded in bignum PTR.  */
+static void
+finalize_bignum (GC_PTR ptr, GC_PTR data)
+{
+  SCM bignum;
+
+  bignum = PTR2SCM (ptr);
+  mpz_clear (SCM_I_BIG_MPZ (bignum));
+}
+
+/* Return a new uninitialized bignum.  */
+static inline SCM
+make_bignum (void)
+{
+  scm_t_bits *p;
+  GC_finalization_proc prev_finalizer;
+  GC_PTR prev_finalizer_data;
+
+  /* Allocate one word for the type tag and enough room for an `mpz_t'.  */
+  p = scm_gc_malloc_pointerless (sizeof (scm_t_bits) + sizeof (mpz_t),
+				 "bignum");
+  p[0] = scm_tc16_big;
+
+  GC_REGISTER_FINALIZER_NO_ORDER (p, finalize_bignum, NULL,
+				  &prev_finalizer,
+				  &prev_finalizer_data);
+
+  return SCM_PACK (p);
+}
+
 
 SCM
 scm_i_mkbig ()
 {
   /* Return a newly created bignum. */
-  SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+  SCM z = make_bignum ();
   mpz_init (SCM_I_BIG_MPZ (z));
   return z;
 }
@@ -210,7 +197,7 @@ SCM
 scm_i_long2big (long x)
 {
   /* Return a newly created bignum initialized to X. */
-  SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+  SCM z = make_bignum ();
   mpz_init_set_si (SCM_I_BIG_MPZ (z), x);
   return z;
 }
@@ -219,7 +206,7 @@ SCM
 scm_i_ulong2big (unsigned long x)
 {
   /* Return a newly created bignum initialized to X. */
-  SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+  SCM z = make_bignum ();
   mpz_init_set_ui (SCM_I_BIG_MPZ (z), x);
   return z;
 }
@@ -228,7 +215,7 @@ SCM
 scm_i_clonebig (SCM src_big, int same_sign_p)
 {
   /* Copy src_big's value, negate it if same_sign_p is false, and return. */
-  SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+  SCM z = make_bignum ();
   mpz_init_set (SCM_I_BIG_MPZ (z), SCM_I_BIG_MPZ (src_big));
   if (!same_sign_p)
     mpz_neg (SCM_I_BIG_MPZ (z), SCM_I_BIG_MPZ (z));
@@ -249,7 +236,7 @@ SCM
 scm_i_dbl2big (double d)
 {
   /* results are only defined if d is an integer */
-  SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+  SCM z = make_bignum ();
   mpz_init_set_d (SCM_I_BIG_MPZ (z), d);
   return z;
 }
@@ -379,7 +366,7 @@ scm_i_mpz2num (mpz_t b)
     }
 
   {
-    SCM z = scm_double_cell (scm_tc16_big, 0, 0, 0);
+    SCM z = make_bignum ();
     mpz_init_set (SCM_I_BIG_MPZ (z), b);
     return z;
   }
@@ -583,10 +570,10 @@ SCM_DEFINE (scm_inf_p, "inf?", 1, 0, 0,
 #define FUNC_NAME s_scm_inf_p
 {
   if (SCM_REALP (x))
-    return scm_from_bool (xisinf (SCM_REAL_VALUE (x)));
+    return scm_from_bool (isinf (SCM_REAL_VALUE (x)));
   else if (SCM_COMPLEXP (x))
-    return scm_from_bool (xisinf (SCM_COMPLEX_REAL (x))
-			  || xisinf (SCM_COMPLEX_IMAG (x)));
+    return scm_from_bool (isinf (SCM_COMPLEX_REAL (x))
+			  || isinf (SCM_COMPLEX_IMAG (x)));
   else
     return SCM_BOOL_F;
 }
@@ -599,10 +586,10 @@ SCM_DEFINE (scm_nan_p, "nan?", 1, 0, 0,
 #define FUNC_NAME s_scm_nan_p
 {
   if (SCM_REALP (n))
-    return scm_from_bool (xisnan (SCM_REAL_VALUE (n)));
+    return scm_from_bool (isnan (SCM_REAL_VALUE (n)));
   else if (SCM_COMPLEXP (n))
-    return scm_from_bool (xisnan (SCM_COMPLEX_REAL (n))
-		     || xisnan (SCM_COMPLEX_IMAG (n)));
+    return scm_from_bool (isnan (SCM_COMPLEX_REAL (n))
+		     || isnan (SCM_COMPLEX_IMAG (n)));
   else
     return SCM_BOOL_F;
 }
@@ -617,8 +604,6 @@ static double guile_NaN;
 static void
 guile_ieee_init (void)
 {
-#if defined (HAVE_ISINF) || defined (HAVE_FINITE)
-
 /* Some version of gcc on some old version of Linux used to crash when
    trying to make Inf and NaN.  */
 
@@ -645,10 +630,6 @@ guile_ieee_init (void)
     }
 #endif
 
-#endif
-
-#if defined (HAVE_ISNAN)
-
 #ifdef NAN
   /* C99 NAN, when available */
   guile_NaN = NAN;
@@ -660,8 +641,6 @@ guile_ieee_init (void)
   }
 #else
   guile_NaN = guile_Inf / guile_Inf;
-#endif
-
 #endif
 }
 
@@ -2216,7 +2195,7 @@ idbl2str (double f, char *a, int radix)
       goto zero;	/*{a[0]='0'; a[1]='.'; a[2]='0'; return 3;} */
     }
 
-  if (xisinf (f))
+  if (isinf (f))
     {
       if (f < 0)
 	strcpy (a, "-inf.0");
@@ -2224,7 +2203,7 @@ idbl2str (double f, char *a, int radix)
 	strcpy (a, "+inf.0");
       return ch+6;
     }
-  else if (xisnan (f))
+  else if (isnan (f))
     {
       strcpy (a, "+nan.0");
       return ch+6;
@@ -2376,7 +2355,7 @@ icmplx2str (double real, double imag, char *str, int radix)
     {
       /* Don't output a '+' for negative numbers or for Inf and
 	 NaN.  They will provide their own sign. */
-      if (0 <= imag && !xisinf (imag) && !xisnan (imag))
+      if (0 <= imag && !isinf (imag) && !isnan (imag))
 	str[i++] = '+';
       i += idbl2str (imag, &str[i], radix);
       str[i++] = 'i';
@@ -3043,7 +3022,7 @@ mem2complex (SCM mem, unsigned int idx,
 
 	      if (scm_is_false (imag))
 		imag = SCM_I_MAKINUM (sign);
-	      else if (sign == -1 && scm_is_false (scm_nan_p (ureal)))
+	      else if (sign == -1 && scm_is_false (scm_nan_p (imag)))
 		imag = scm_difference (imag, SCM_UNDEFINED);
 
 	      if (idx == len)
@@ -3409,7 +3388,7 @@ scm_num_eq_p (SCM x, SCM y)
       else if (SCM_REALP (y))
 	{
 	  int cmp;
-	  if (xisnan (SCM_REAL_VALUE (y)))
+	  if (isnan (SCM_REAL_VALUE (y)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (x), SCM_REAL_VALUE (y));
 	  scm_remember_upto_here_1 (x);
@@ -3420,7 +3399,7 @@ scm_num_eq_p (SCM x, SCM y)
 	  int cmp;
 	  if (0.0 != SCM_COMPLEX_IMAG (y))
 	    return SCM_BOOL_F;
-	  if (xisnan (SCM_COMPLEX_REAL (y)))
+	  if (isnan (SCM_COMPLEX_REAL (y)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (x), SCM_COMPLEX_REAL (y));
 	  scm_remember_upto_here_1 (x);
@@ -3445,7 +3424,7 @@ scm_num_eq_p (SCM x, SCM y)
       else if (SCM_BIGP (y))
 	{
 	  int cmp;
-	  if (xisnan (SCM_REAL_VALUE (x)))
+	  if (isnan (SCM_REAL_VALUE (x)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (y), SCM_REAL_VALUE (x));
 	  scm_remember_upto_here_1 (y);
@@ -3459,9 +3438,9 @@ scm_num_eq_p (SCM x, SCM y)
       else if (SCM_FRACTIONP (y))
         {
           double  xx = SCM_REAL_VALUE (x);
-          if (xisnan (xx))
+          if (isnan (xx))
             return SCM_BOOL_F;
-          if (xisinf (xx))
+          if (isinf (xx))
             return scm_from_bool (xx < 0.0);
           x = scm_inexact_to_exact (x);  /* with x as frac or int */
           goto again;
@@ -3479,7 +3458,7 @@ scm_num_eq_p (SCM x, SCM y)
 	  int cmp;
 	  if (0.0 != SCM_COMPLEX_IMAG (x))
 	    return SCM_BOOL_F;
-	  if (xisnan (SCM_COMPLEX_REAL (x)))
+	  if (isnan (SCM_COMPLEX_REAL (x)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (y), SCM_COMPLEX_REAL (x));
 	  scm_remember_upto_here_1 (y);
@@ -3497,9 +3476,9 @@ scm_num_eq_p (SCM x, SCM y)
           if (SCM_COMPLEX_IMAG (x) != 0.0)
             return SCM_BOOL_F;
           xx = SCM_COMPLEX_REAL (x);
-          if (xisnan (xx))
+          if (isnan (xx))
             return SCM_BOOL_F;
-          if (xisinf (xx))
+          if (isinf (xx))
             return scm_from_bool (xx < 0.0);
           x = scm_inexact_to_exact (x);  /* with x as frac or int */
           goto again;
@@ -3516,9 +3495,9 @@ scm_num_eq_p (SCM x, SCM y)
       else if (SCM_REALP (y))
         {
           double yy = SCM_REAL_VALUE (y);
-          if (xisnan (yy))
+          if (isnan (yy))
             return SCM_BOOL_F;
-          if (xisinf (yy))
+          if (isinf (yy))
             return scm_from_bool (0.0 < yy);
           y = scm_inexact_to_exact (y);  /* with y as frac or int */
           goto again;
@@ -3529,9 +3508,9 @@ scm_num_eq_p (SCM x, SCM y)
           if (SCM_COMPLEX_IMAG (y) != 0.0)
             return SCM_BOOL_F;
           yy = SCM_COMPLEX_REAL (y);
-          if (xisnan (yy))
+          if (isnan (yy))
             return SCM_BOOL_F;
-          if (xisinf (yy))
+          if (isinf (yy))
             return scm_from_bool (0.0 < yy);
           y = scm_inexact_to_exact (y);  /* with y as frac or int */
           goto again;
@@ -3620,7 +3599,7 @@ scm_less_p (SCM x, SCM y)
       else if (SCM_REALP (y))
 	{
 	  int cmp;
-	  if (xisnan (SCM_REAL_VALUE (y)))
+	  if (isnan (SCM_REAL_VALUE (y)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (x), SCM_REAL_VALUE (y));
 	  scm_remember_upto_here_1 (x);
@@ -3638,7 +3617,7 @@ scm_less_p (SCM x, SCM y)
       else if (SCM_BIGP (y))
 	{
 	  int cmp;
-	  if (xisnan (SCM_REAL_VALUE (x)))
+	  if (isnan (SCM_REAL_VALUE (x)))
 	    return SCM_BOOL_F;
 	  cmp = xmpz_cmp_d (SCM_I_BIG_MPZ (y), SCM_REAL_VALUE (x));
 	  scm_remember_upto_here_1 (y);
@@ -3649,9 +3628,9 @@ scm_less_p (SCM x, SCM y)
       else if (SCM_FRACTIONP (y))
         {
           double  xx = SCM_REAL_VALUE (x);
-	  if (xisnan (xx))
+	  if (isnan (xx))
 	    return SCM_BOOL_F;
-          if (xisinf (xx))
+          if (isinf (xx))
             return scm_from_bool (xx < 0.0);
           x = scm_inexact_to_exact (x);  /* with x as frac or int */
           goto again;
@@ -3671,9 +3650,9 @@ scm_less_p (SCM x, SCM y)
       else if (SCM_REALP (y))
         {
           double yy = SCM_REAL_VALUE (y);
-          if (xisnan (yy))
+          if (isnan (yy))
             return SCM_BOOL_F;
-          if (xisinf (yy))
+          if (isinf (yy))
             return scm_from_bool (0.0 < yy);
           y = scm_inexact_to_exact (y);  /* with y as frac or int */
           goto again;
@@ -3988,7 +3967,7 @@ scm_max (SCM x, SCM y)
 	     calling isnan is unavoidable, since it's the only way to know
 	     which of x or y causes any compares to be false */
 	  double xx = SCM_REAL_VALUE (x);
-	  return (xisnan (xx) || xx > SCM_REAL_VALUE (y)) ? x : y;
+	  return (isnan (xx) || xx > SCM_REAL_VALUE (y)) ? x : y;
 	}
       else if (SCM_FRACTIONP (y))
 	{
@@ -4134,7 +4113,7 @@ scm_min (SCM x, SCM y)
 	     calling isnan is unavoidable, since it's the only way to know
 	     which of x or y causes any compares to be false */
 	  double xx = SCM_REAL_VALUE (x);
-	  return (xisnan (xx) || xx < SCM_REAL_VALUE (y)) ? x : y;
+	  return (isnan (xx) || xx < SCM_REAL_VALUE (y)) ? x : y;
 	}
       else if (SCM_FRACTIONP (y))
 	{
@@ -5994,7 +5973,7 @@ SCM_DEFINE (scm_inexact_to_exact, "inexact->exact", 1, 0, 0,
     return z;
   else if (SCM_REALP (z))
     {
-      if (xisinf (SCM_REAL_VALUE (z)) || xisnan (SCM_REAL_VALUE (z)))
+      if (isinf (SCM_REAL_VALUE (z)) || isnan (SCM_REAL_VALUE (z)))
 	SCM_OUT_OF_RANGE (1, z);
       else
 	{
@@ -6362,7 +6341,7 @@ scm_num2float (SCM num, unsigned long int pos, const char *s_caller)
   if (SCM_BIGP (num))
     {
       float res = mpz_get_d (SCM_I_BIG_MPZ (num));
-      if (!xisinf (res))
+      if (!isinf (res))
 	return res;
       else
 	scm_out_of_range (NULL, num);
@@ -6380,7 +6359,7 @@ scm_num2double (SCM num, unsigned long int pos, const char *s_caller)
   if (SCM_BIGP (num))
     {
       double res = mpz_get_d (SCM_I_BIG_MPZ (num));
-      if (!xisinf (res))
+      if (!isinf (res))
 	return res;
       else
 	scm_out_of_range (NULL, num);
@@ -6492,7 +6471,8 @@ SCM_DEFINE (scm_log10, "log10", 1, 0, 0,
       /* Mingw has clog() but not clog10().  (Maybe it'd be worth using
          clog() and a multiply by M_LOG10E, rather than the fallback
          log10+hypot+atan2.)  */
-#if HAVE_COMPLEX_DOUBLE && HAVE_CLOG10 && defined (SCM_COMPLEX_VALUE)
+#if defined HAVE_COMPLEX_DOUBLE && defined HAVE_CLOG10	\
+      && defined SCM_COMPLEX_VALUE
       return scm_from_complex_double (clog10 (SCM_COMPLEX_VALUE (z)));
 #else
       double re = SCM_COMPLEX_REAL (z);
@@ -6558,7 +6538,8 @@ SCM_DEFINE (scm_sqrt, "sqrt", 1, 0, 0,
 {
   if (SCM_COMPLEXP (x))
     {
-#if HAVE_COMPLEX_DOUBLE && HAVE_USABLE_CSQRT && defined (SCM_COMPLEX_VALUE)
+#if defined HAVE_COMPLEX_DOUBLE && defined HAVE_USABLE_CSQRT	\
+      && defined SCM_COMPLEX_VALUE
       return scm_from_complex_double (csqrt (SCM_COMPLEX_VALUE (x)));
 #else
       double re = SCM_COMPLEX_REAL (x);
