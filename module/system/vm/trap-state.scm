@@ -26,7 +26,10 @@
   #:use-module (system vm vm)
   #:use-module (system vm traps)
   #:use-module (system vm trace)
-  #:export (list-traps
+  #:use-module (system vm frame)
+  #:use-module (system vm program)
+  #:export (add-trap!
+            list-traps
             trap-enabled?
             trap-name
             enable-trap!
@@ -38,7 +41,9 @@
 
             add-trap-at-procedure-call!
             add-trace-at-procedure-call!
-            add-trap-at-source-location!))
+            add-trap-at-source-location!
+            add-ephemeral-trap-at-frame-finish!
+            add-ephemeral-stepping-trap!))
 
 (define %default-trap-handler (make-fluid))
 
@@ -57,6 +62,7 @@
 (define-record <trap-state>
   (handler default-trap-handler)
   (next-idx 0)
+  (next-ephemeral-idx -1)
   (wrappers '()))
 
 (define (trap-wrapper<? t1 t2)
@@ -86,7 +92,8 @@
   (trap-wrapper-index wrapper))
 
 (define (remove-trap-wrapper! trap-state wrapper)
-  (delq wrapper (trap-state-wrappers trap-state)))
+  (set! (trap-state-wrappers trap-state)
+        (delq wrapper (trap-state-wrappers trap-state))))
 
 (define (trap-state->trace-level trap-state)
   (fold (lambda (wrapper level)
@@ -102,7 +109,7 @@
      ((null? wrappers)
       (warn "no wrapper found with index in trap-state" idx)
       #f)
-     ((= (trap-wrapper-index (car wrappers)) idx)
+     ((eqv? (trap-wrapper-index (car wrappers)) idx)
       (car wrappers))
      (else
       (lp (cdr wrappers))))))
@@ -110,6 +117,11 @@
 (define (next-index! trap-state)
   (let ((idx (trap-state-next-idx trap-state)))
     (set! (trap-state-next-idx trap-state) (1+ idx))
+    idx))
+
+(define (next-ephemeral-index! trap-state)
+  (let ((idx (trap-state-next-ephemeral-idx trap-state)))
+    (set! (trap-state-next-ephemeral-idx trap-state) (1- idx))
     idx))
 
 (define (handler-for-index trap-state idx)
@@ -120,6 +132,16 @@
           (handler frame
                    (trap-wrapper-index wrapper)
                    (trap-wrapper-name wrapper))))))
+
+(define (ephemeral-handler-for-index trap-state idx handler)
+  (lambda (frame)
+    (let ((wrapper (wrapper-at-index trap-state idx)))
+      (if wrapper
+          (begin
+            (if (trap-wrapper-enabled? wrapper)
+                (disable-trap-wrapper! wrapper))
+            (remove-trap-wrapper! trap-state wrapper)
+            (handler frame))))))
 
 
 
@@ -219,6 +241,59 @@
      (make-trap-wrapper
       idx #t trap
       (format #f "Breakpoint at ~a:~a" file user-line)))))
+
+;; handler := frame -> nothing
+(define* (add-ephemeral-trap-at-frame-finish! frame handler
+                                              #:optional (trap-state
+                                                          (the-trap-state)))
+  (let* ((idx (next-ephemeral-index! trap-state))
+         (trap (trap-frame-finish
+                frame
+                (ephemeral-handler-for-index trap-state idx handler)
+                (lambda (frame) (delete-trap! idx trap-state)))))
+    (add-trap-wrapper!
+     trap-state
+     (make-trap-wrapper
+      idx #t trap
+      (format #f "Return from ~a" frame)))))
+
+(define (source-string source)
+  (if source
+      (format #f "~a:~a:~a" (or (source:file source) "unknown file")
+              (source:line-for-user source) (source:column source))
+      "unknown source location"))
+
+(define* (add-ephemeral-stepping-trap! frame handler
+                                       #:optional (trap-state
+                                                   (the-trap-state))
+                                       #:key (into? #t) (instruction? #f))
+  (define (wrap-predicate-according-to-into predicate)
+    (if into?
+        predicate
+        (let ((fp (frame-address frame)))
+          (lambda (f)
+            (and (<= (frame-address f) fp)
+                 (predicate f))))))
+  
+  (let* ((source (frame-next-source frame))
+         (idx (next-ephemeral-index! trap-state))
+         (trap (trap-matching-instructions
+                (wrap-predicate-according-to-into
+                 (if instruction?
+                     (lambda (f) #t)
+                     (lambda (f) (not (equal? (frame-next-source f) source)))))
+                (ephemeral-handler-for-index trap-state idx handler))))
+    (add-trap-wrapper!
+     trap-state
+     (make-trap-wrapper
+      idx #t trap
+      (if instruction?
+          (if into?
+              "Step to different instruction"
+              (format #f "Step to different instruction in ~a" frame))
+          (if into?
+              (format #f "Step into ~a" (source-string source)) 
+              (format #f "Step out of ~a" (source-string source))))))))
 
 (define* (add-trap! trap name #:optional (trap-state (the-trap-state)))
   (let* ((idx (next-index! trap-state)))

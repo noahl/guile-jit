@@ -33,7 +33,8 @@
             unused-variable-analysis
             unused-toplevel-analysis
             unbound-variable-analysis
-            arity-analysis))
+            arity-analysis
+            format-analysis))
 
 ;; Allocation is the process of assigning storage locations for lexical
 ;; variables. A lexical variable has a distinct "address", or storage
@@ -1194,3 +1195,214 @@ accurate information is missing from a given `tree-il' element."
         toplevel-calls)))
 
    (make-arity-info vlist-null vlist-null vlist-null)))
+
+
+;;;
+;;; `format' argument analysis.
+;;;
+
+(define &syntax-error
+  ;; The `throw' key for syntax errors.
+  (gensym "format-string-syntax-error"))
+
+(define (format-string-argument-count fmt)
+  ;; Return the minimum and maxium number of arguments that should
+  ;; follow format string FMT (or, ahem, a good estimate thereof) or
+  ;; `any' if the format string can be followed by any number of
+  ;; arguments.
+
+  (define (drop-group chars end)
+    ;; Drop characters from CHARS until "~END" is encountered.
+    (let loop ((chars  chars)
+               (tilde? #f))
+      (if (null? chars)
+          (throw &syntax-error 'unterminated-iteration)
+          (if tilde?
+              (if (eq? (car chars) end)
+                  (cdr chars)
+                  (loop (cdr chars) #f))
+              (if (eq? (car chars) #\~)
+                  (loop (cdr chars) #t)
+                  (loop (cdr chars) #f))))))
+
+  (define (digit? char)
+    ;; Return true if CHAR is a digit, #f otherwise.
+    (memq char '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)))
+
+  (define (previous-number chars)
+    ;; Return the previous series of digits found in CHARS.
+    (let ((numbers (take-while digit? chars)))
+      (and (not (null? numbers))
+           (string->number (list->string (reverse numbers))))))
+
+  (let loop ((chars       (string->list fmt))
+             (state       'literal)
+             (params      '())
+             (conditions  '())
+             (end-group   #f)
+             (min-count 0)
+             (max-count 0))
+    (if (null? chars)
+        (if end-group
+            (throw &syntax-error 'unterminated-conditional)
+            (values min-count max-count))
+        (case state
+          ((tilde)
+           (case (car chars)
+             ((#\~ #\% #\& #\t #\_ #\newline #\( #\))
+                        (loop (cdr chars) 'literal '()
+                              conditions end-group
+                              min-count max-count))
+             ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9 #\, #\: #\@)
+                        (loop (cdr chars)
+                              'tilde (cons (car chars) params)
+                              conditions end-group
+                              min-count max-count))
+             ((#\v #\V) (loop (cdr chars)
+                              'tilde (cons (car chars) params)
+                              conditions end-group
+                              (+ 1 min-count)
+                              (+ 1 max-count)))
+             ((#\[)
+              (loop chars 'literal '() '()
+                    (let ((selector (previous-number params))
+                          (at?      (memq #\@ params)))
+                      (lambda (chars conds)
+                        ;; end of group
+                        (let ((mins (map car conds))
+                              (maxs (map cdr conds))
+                              (sel? (and selector
+                                         (< selector (length conds)))))
+                          (if (and (every number? mins)
+                                   (every number? maxs))
+                              (loop chars 'literal '() conditions end-group
+                                    (+ min-count
+                                       (if sel?
+                                           (car (list-ref conds selector))
+                                           (+ (if at? 0 1)
+                                              (if (null? mins)
+                                                  0
+                                                  (apply min mins)))))
+                                    (+ max-count
+                                       (if sel?
+                                           (cdr (list-ref conds selector))
+                                           (+ (if at? 0 1)
+                                              (if (null? maxs)
+                                                  0
+                                                  (apply max maxs))))))
+                              (values 'any 'any))))) ;; XXX: approximation
+                    0 0))
+             ((#\;)
+              (if end-group
+                  (loop (cdr chars) 'literal '()
+                        (cons (cons min-count max-count) conditions)
+                        end-group
+                        0 0)
+                  (throw &syntax-error 'unexpected-semicolon)))
+             ((#\])
+              (if end-group
+                  (end-group (cdr chars)
+                             (reverse (cons (cons min-count max-count)
+                                            conditions)))
+                  (throw &syntax-error 'unexpected-conditional-termination)))
+             ((#\{)     (if (memq #\@ params)
+                            (values min-count 'any)
+                            (loop (drop-group (cdr chars) #\})
+                                  'literal '()
+                                  conditions end-group
+                                  (+ 1 min-count) (+ 1 max-count))))
+             ((#\*)     (if (memq #\@ params)
+                            (values 'any 'any) ;; it's unclear what to do here
+                            (loop (cdr chars)
+                                  'literal '()
+                                  conditions end-group
+                                  (+ (or (previous-number params) 1)
+                                     min-count)
+                                  (+ (or (previous-number params) 1)
+                                     max-count))))
+             ((#\? #\k)
+              ;; We don't have enough info to determine the exact number
+              ;; of args, but we could determine a lower bound (TODO).
+              (values 'any 'any))
+             (else      (loop (cdr chars) 'literal '()
+                              conditions end-group
+                              (+ 1 min-count) (+ 1 max-count)))))
+          ((literal)
+           (case (car chars)
+             ((#\~)     (loop (cdr chars) 'tilde '()
+                              conditions end-group
+                              min-count max-count))
+             (else      (loop (cdr chars) 'literal '()
+                              conditions end-group
+                              min-count max-count))))
+          (else (error "computer bought the farm" state))))))
+
+(define format-analysis
+  ;; Report arity mismatches in the given tree.
+  (make-tree-analysis
+   (lambda (x _ env locs)
+     ;; X is a leaf.
+     #t)
+
+   (lambda (x _ env locs)
+     ;; Down into X.
+     (define (check-format-args args loc)
+       (pmatch args
+         ((,port ,fmt . ,rest)
+          (guard (const? fmt))
+          (if (and (const? port)
+                   (not (boolean? (const-exp port))))
+              (warning 'format loc 'wrong-port (const-exp port)))
+          (let ((fmt   (const-exp fmt))
+                (count (length rest)))
+            (if (string? fmt)
+                (catch &syntax-error
+                  (lambda ()
+                    (let-values (((min max)
+                                  (format-string-argument-count fmt)))
+                      (and min max
+                           (or (and (or (eq? min 'any) (>= count min))
+                                    (or (eq? max 'any) (<= count max)))
+                               (warning 'format loc 'wrong-format-arg-count
+                                        fmt min max count)))))
+                  (lambda (_ key)
+                    (warning 'format loc 'syntax-error key fmt)))
+                (warning 'format loc 'wrong-format-string fmt))))
+         ((,port ,fmt . ,rest)
+          ;; Warn on non-literal format strings, unless they refer to a
+          ;; lexical variable named "fmt".
+          (if (record-case fmt
+                ((<lexical-ref> name)
+                 (not (eq? name 'fmt)))
+                (else #t))
+              (warning 'format loc 'non-literal-format-string)))
+         (else
+          (warning 'format loc 'wrong-num-args (length args)))))
+
+     (define (resolve-toplevel name)
+       (and (module? env)
+            (false-if-exception (module-ref env name))))
+
+     (record-case x
+       ((<application> proc args src)
+        (let ((loc src))
+          (record-case proc
+            ((<toplevel-ref> name src)
+             (let ((proc (resolve-toplevel name)))
+               (and (or (eq? proc format)
+                        (eq? proc (@ (ice-9 format) format)))
+                    (check-format-args args (or src (find pair? locs))))))
+            (else #t)))
+        #t)
+       (else #t))
+     #t)
+
+   (lambda (x _ env locs)
+     ;; Up from X.
+     #t)
+
+   (lambda (_ env)
+     ;; Post-processing.
+     #t)
+
+   #t))

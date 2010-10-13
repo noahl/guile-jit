@@ -5723,9 +5723,10 @@ scm_c_make_rectangular (double re, double im)
   else
     {
       SCM z;
-      SCM_NEWSMOB (z, scm_tc16_complex,
-		   scm_gc_malloc_pointerless (sizeof (scm_t_complex),
+
+      z = PTR2SCM (scm_gc_malloc_pointerless (sizeof (scm_t_complex),
 					      "complex"));
+      SCM_SET_CELL_TYPE (z, scm_tc16_complex);
       SCM_COMPLEX_REAL (z) = re;
       SCM_COMPLEX_IMAG (z) = im;
       return z;
@@ -6325,8 +6326,13 @@ scm_to_double (SCM val)
 SCM
 scm_from_double (double val)
 {
-  SCM z = scm_double_cell (scm_tc16_real, 0, 0, 0);
+  SCM z;
+
+  z = PTR2SCM (scm_gc_malloc_pointerless (sizeof (scm_t_double), "real"));
+
+  SCM_SET_CELL_TYPE (z, scm_tc16_real);
   SCM_REAL_VALUE (z) = val;
+
   return z;
 }
 

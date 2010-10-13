@@ -26,6 +26,7 @@
 (define-module (system base message)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
+  #:use-module (ice-9 match)
   #:export (*current-warning-port* warning
 
             warning-type? warning-type-name warning-type-description
@@ -102,7 +103,67 @@
                          loc name)
                  (format port
                          "~A: warning: possibly wrong number of arguments to `~A'~%"
-                         loc name)))))))
+                         loc name))))
+
+         (format
+          "report wrong number of arguments to `format'"
+          ,(lambda (port loc . rest)
+             (define (escape-newlines str)
+               (list->string
+                (string-fold-right (lambda (c r)
+                                     (if (eq? c #\newline)
+                                         (append '(#\\ #\n) r)
+                                         (cons c r)))
+                                   '()
+                                   str)))
+
+             (define (range min max)
+               (cond ((eq? min 'any)
+                      (if (eq? max 'any)
+                          "any number" ;; can't happen
+                          (format #f "up to ~a" max)))
+                     ((eq? max 'any)
+                      (format #f "at least ~a" min))
+                     ((= min max) (number->string min))
+                     (else
+                      (format #f "~a to ~a" min max))))
+
+             (match rest
+               (('wrong-format-arg-count fmt min max actual)
+                (format port
+                        "~A: warning: ~S: wrong number of `format' arguments: expected ~A, got ~A~%"
+                        loc (escape-newlines fmt)
+                        (range min max) actual))
+               (('syntax-error 'unterminated-iteration fmt)
+                (format port "~A: warning: ~S: unterminated iteration~%"
+                        loc (escape-newlines fmt)))
+               (('syntax-error 'unterminated-conditional fmt)
+                (format port "~A: warning: ~S: unterminated conditional~%"
+                        loc (escape-newlines fmt)))
+               (('syntax-error 'unexpected-semicolon fmt)
+                (format port "~A: warning: ~S: unexpected `~~;'~%"
+                        loc (escape-newlines fmt)))
+               (('syntax-error 'unexpected-conditional-termination fmt)
+                (format port "~A: warning: ~S: unexpected `~~]'~%"
+                        loc (escape-newlines fmt)))
+               (('wrong-port wrong-port)
+                (format port
+                        "~A: warning: ~S: wrong port argument~%"
+                        loc wrong-port))
+               (('wrong-format-string fmt)
+                (format port
+                        "~A: warning: ~S: wrong format string~%"
+                        loc fmt))
+               (('non-literal-format-string)
+                (format port
+                        "~A: warning: non-literal format string~%"
+                        loc))
+               (('wrong-num-args count)
+                (format port
+                        "~A: warning: wrong number of arguments to `format'~%"
+                        loc))
+               (else
+                (format port "~A: `format' warning~%" loc))))))))
 
 (define (lookup-warning-type name)
   "Return the warning type NAME or `#f' if not found."

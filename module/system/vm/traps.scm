@@ -60,6 +60,7 @@
   #:use-module (system vm frame)
   #:use-module (system vm program)
   #:use-module (system vm objcode)
+  #:use-module (system vm instruction)
   #:use-module (system xref)
   #:use-module (rnrs bytevectors)
   #:export (trap-at-procedure-call
@@ -71,7 +72,8 @@
             trap-in-dynamic-extent
             trap-calls-in-dynamic-extent
             trap-instructions-in-dynamic-extent
-            trap-calls-to-procedure))
+            trap-calls-to-procedure
+            trap-matching-instructions))
 
 (define-syntax arg-check
   (syntax-rules ()
@@ -186,7 +188,7 @@
       (if in-proc?
           (exit-proc frame))
       (if (our-frame? (frame-previous frame))
-          (enter-proc frame)))
+          (enter-proc (frame-previous frame))))
 
     (define (abort-hook frame)
       (if in-proc?
@@ -262,11 +264,12 @@
 
 (define (in-range? range i)
   (or-map (lambda (bounds)
-            (<= (car bounds) i (cdr bounds)))
+            (and (<= (car bounds) i)
+                 (< i (cdr bounds))))
           range))
 
 ;; Building on trap-instructions-in-procedure, we have
-;; trap-instructions-in-procedure.
+;; trap-at-procedure-ip-in-range.
 ;;
 (define* (trap-at-procedure-ip-in-range proc range handler
                                         #:key current-frame (vm (the-vm))
@@ -276,15 +279,31 @@
   (arg-check proc procedure?)
   (arg-check range range?)
   (arg-check handler procedure?)
-  (let ((was-in-range? #f))
+  (let ((fp-stack '()))
+    (define (cull-frames! fp)
+      (let lp ((frames fp-stack))
+        (if (and (pair? frames) (< (car frames) fp))
+            (lp (cdr frames))
+            (set! fp-stack frames))))
+
     (define (next-handler frame)
-      (let ((now-in-range? (in-range? range (frame-instruction-pointer frame))))
-        (cond
-         (was-in-range? (set! was-in-range? now-in-range?))
-         (now-in-range? (handler frame) (set! was-in-range? #t)))))
+      (let ((fp (frame-address frame))
+            (ip (frame-instruction-pointer frame)))
+        (cull-frames! fp)
+        (let ((now-in-range? (in-range? range ip))
+              (was-in-range? (and (pair? fp-stack) (= (car fp-stack) fp))))
+          (cond
+           (was-in-range?
+            (if (not now-in-range?)
+                (set! fp-stack (cdr fp-stack))))
+           (now-in-range?
+            (set! fp-stack (cons fp fp-stack))
+            (handler frame))))))
     
     (define (exit-handler frame)
-      (set! was-in-range? #f))
+      (if (and (pair? fp-stack)
+               (= (car fp-stack) (frame-address frame)))
+          (set! fp-stack (cdr fp-stack))))
     
     (trap-instructions-in-procedure proc next-handler exit-handler
                                     #:current-frame current-frame #:vm vm
@@ -297,7 +316,7 @@
   (bytevector-u32-native-ref (objcode->bytecode (program-objcode prog)) 0))
 
 (define (program-sources-by-line proc file)
-  (let lp ((sources (program-sources proc))
+  (let lp ((sources (program-sources-pre-retire proc))
            (out '()))
     (if (pair? sources)
         (lp (cdr sources)
@@ -532,7 +551,7 @@
 ;; Traps calls and returns for a given procedure, keeping track of the call depth.
 ;;
 (define* (trap-calls-to-procedure proc apply-handler return-handler
-                                  #:key (width 80) (vm (the-vm)))
+                                  #:key (vm (the-vm)))
   (arg-check proc procedure?)
   (arg-check apply-handler procedure?)
   (arg-check return-handler procedure?)
@@ -590,3 +609,21 @@
 
     (with-pending-finish-disablers
      (trap-at-procedure-call proc apply-hook #:vm vm))))
+
+;; Trap when the source location changes.
+;;
+(define* (trap-matching-instructions frame-pred handler
+                                     #:key (vm (the-vm)))
+  (arg-check frame-pred procedure?)
+  (arg-check handler procedure?)
+  (let ()
+    (define (next-hook frame)
+      (if (frame-pred frame)
+          (handler frame)))
+  
+    (new-enabled-trap
+     vm #f
+     (lambda (frame)
+       (add-hook! (vm-next-hook vm) next-hook))
+     (lambda (frame)
+       (remove-hook! (vm-next-hook vm) next-hook)))))

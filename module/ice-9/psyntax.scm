@@ -554,8 +554,12 @@
         ((_ type value) (cons type value))
         ((_ 'type) '(type))
         ((_ type) (cons type '()))))
-    (define binding-type car)
-    (define binding-value cdr)
+    (define-syntax binding-type
+      (syntax-rules ()
+        ((_ x) (car x))))
+    (define-syntax binding-value
+      (syntax-rules ()
+        ((_ x) (cdr x))))
 
     (define-syntax null-env (identifier-syntax '()))
 
@@ -643,9 +647,9 @@
     ;;         <subs> ::= #(<old name> <label> (<mark> ...))
     ;;        <shift> ::= positive fixnum
 
-    (define make-wrap cons)
-    (define wrap-marks car)
-    (define wrap-subst cdr)
+    (define-syntax make-wrap (identifier-syntax cons))
+    (define-syntax wrap-marks (identifier-syntax car))
+    (define-syntax wrap-subst (identifier-syntax cdr))
 
     (define-syntax subst-rename? (identifier-syntax vector?))
     (define-syntax rename-old (syntax-rules () ((_ x) (vector-ref x 0))))

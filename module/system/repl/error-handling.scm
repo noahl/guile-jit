@@ -34,14 +34,15 @@
 ;;;
 
 (define (error-string stack key args)
-  (with-output-to-string
-    (lambda ()
-      (pmatch args
-        ((,subr ,msg ,args . ,rest)
+  (pmatch args
+    ((,subr ,msg ,args . ,rest)
+     (guard (> (vector-length stack) 0))
+     (with-output-to-string
+       (lambda ()
          (display-error (vector-ref stack 0) (current-output-port)
-                        subr msg args rest))
-        (else
-         (format #t "Throw to key `~a' with args `~s'." key args))))))
+                        subr msg args rest))))
+    (else
+     (format #f "Throw to key `~a' with args `~s'." key args))))
 
 (define* (call-with-error-handling thunk #:key
                                    (on-error 'debug) (post-error 'catch)
@@ -72,13 +73,17 @@
                      ;; invoking the start-stack thunk has its own frame
                      ;; too.
                      0 (and tag 1)))
-             (error-msg (format #f "Trap ~d: ~a" trap-idx trap-name))
-             (debug (make-debug stack 0 error-msg)))
+             (error-msg (if trap-idx
+                            (format #f "Trap ~d: ~a" trap-idx trap-name)
+                            trap-name))
+             (debug (make-debug stack 0 error-msg #t)))
         (with-saved-ports
          (lambda ()
-           (format #t "~a~%" error-msg)
-           (format #t "Entering a new prompt.  ")
-           (format #t "Type `,bt' for a backtrace or `,q' to continue.\n")
+           (if trap-idx
+               (begin
+                 (format #t "~a~%" error-msg)
+                 (format #t "Entering a new prompt.  ")
+                 (format #t "Type `,bt' for a backtrace or `,q' to continue.\n")))
            ((@ (system repl repl) start-repl) #:debug debug)))))
 
     (define (null-trap-handler frame trap-idx trap-name)
@@ -140,10 +145,10 @@
                           ;; the start-stack thunk has its own frame too.
                           0 (and tag 1)))
                   (error-msg (error-string stack key args))
-                  (debug (make-debug stack 0 error-msg)))
+                  (debug (make-debug stack 0 error-msg #f)))
              (with-saved-ports
               (lambda ()
-                (format #t error-msg)
+                (format #t "~a~%" error-msg)
                 (format #t "Entering a new prompt.  ")
                 (format #t "Type `,bt' for a backtrace or `,q' to continue.\n")
                 ((@ (system repl repl) start-repl) #:debug debug))))))

@@ -47,7 +47,8 @@
   `((unused-variable     . ,unused-variable-analysis)
     (unused-toplevel     . ,unused-toplevel-analysis)
     (unbound-variable    . ,unbound-variable-analysis)
-    (arity-mismatch      . ,arity-analysis)))
+    (arity-mismatch      . ,arity-analysis)
+    (format              . ,format-analysis)))
 
 (define (compile-glil x e opts)
   (define warnings
@@ -105,6 +106,8 @@
    ((set-cdr! . 2) . set-cdr!)
    ((null? . 1) . null?)
    ((list? . 1) . list?)
+   ((symbol? . 1) . symbol?)
+   ((vector? . 1) . vector?)
    (list . list)
    (vector . vector)
    ((class-of . 1) . class-of)

@@ -238,6 +238,10 @@ higher-order procedures."
       (scm-error 'wrong-type-arg caller
 		 "Wrong type argument: ~S" (list arg) '())))
 
+(define (out-of-range proc arg)
+  (scm-error 'out-of-range proc
+             "Value out of range: ~A" (list arg) (list arg)))
+
 ;; the srfi spec doesn't seem to forbid inexact integers.
 (define (non-negative-integer? x) (and (integer? x) (>= x 0)))
 
@@ -375,6 +379,30 @@ end-of-list checking in contexts where dotted lists are allowed."
               (loop (cdr prev)
                     (cdr tail)))))))
 
+(define (split-at lst i)
+  "Return two values, a list of the elements before index I in LST, and
+a list of those after."
+  (if (< i 0)
+      (out-of-range 'split-at i)
+      (let lp ((l lst) (n i) (acc '()))
+        (if (<= n 0)
+            (values (reverse! acc) l)
+            (lp (cdr l) (- n 1) (cons (car l) acc))))))
+
+(define (split-at! lst i)
+  "Linear-update variant of `split-at'."
+  (cond ((< i 0)
+         (out-of-range 'split-at! i))
+        ((= i 0)
+         (values '() lst))
+        (else
+         (let lp ((l lst) (n (- i 1)))
+           (if (<= n 0)
+               (let ((tmp (cdr l)))
+                 (set-cdr! l '())
+                 (values lst tmp))
+               (lp (cdr l) (- n 1)))))))
+
 (define (last pair)
   "Return the last element of the non-empty, finite list PAIR."
   (car (last-pair pair)))
@@ -419,14 +447,18 @@ that result.  See the manual for details."
 
 (define (fold-right kons knil clist1 . rest)
   (if (null? rest)
-    (let f ((list1 clist1))
-      (if (null? list1)
-	knil
-	(kons (car list1) (f (cdr list1)))))
-    (let f ((lists (cons clist1 rest)))
-      (if (any null? lists)
-	knil
-	(apply kons (append! (map1 car lists) (list (f (map1 cdr lists)))))))))
+      (let loop ((lst    (reverse clist1))
+                 (result knil))
+        (if (null? lst)
+            result
+            (loop (cdr lst)
+                  (kons (car lst) result))))
+      (let loop ((lists  (map1 reverse (cons clist1 rest)))
+                 (result knil))
+        (if (any1 null? lists)
+            result
+            (loop (map1 cdr lists)
+                  (apply kons (append! (map1 car lists) (list result))))))))
 
 (define (pair-fold kons knil clist1 . rest)
   (if (null? rest)
@@ -454,11 +486,20 @@ that result.  See the manual for details."
 	(apply kons (append! lists (list (f (map1 cdr lists)))))))))
 
 (define* (unfold p f g seed #:optional (tail-gen (lambda (x) '())))
-  (let uf ((seed seed))
+  (define (reverse+tail lst seed)
+    (let loop ((lst    lst)
+               (result (tail-gen seed)))
+      (if (null? lst)
+          result
+          (loop (cdr lst)
+                (cons (car lst) result)))))
+
+  (let loop ((seed   seed)
+             (result '()))
     (if (p seed)
-        (tail-gen seed)
-        (cons (f seed)
-              (uf (g seed))))))
+        (reverse+tail result seed)
+        (loop (g seed)
+              (cons (f seed) result)))))
 
 (define* (unfold-right p f g seed #:optional (tail '()))
   (let uf ((seed seed) (lis tail))
@@ -497,6 +538,28 @@ has just one element then that's the return value."
 
 ;; OPTIMIZE-ME: Re-use cons cells of list1
 (define map! map)
+
+(define (filter-map proc list1 . rest)
+  "Apply PROC to to the elements of LIST1... and return a list of the
+results as per SRFI-1 `map', except that any #f results are omitted from
+the list returned."
+  (if (null? rest)
+      (let lp ((l list1)
+               (rl '()))
+        (if (null? l)
+            (reverse! rl)
+            (let ((res (proc (car l))))
+              (if res
+                  (lp (cdr l) (cons res rl))
+                  (lp (cdr l) rl)))))
+      (let lp ((l (cons list1 rest))
+               (rl '()))
+        (if (any1 null? l)
+            (reverse! rl)
+            (let ((res (apply proc (map1 car l))))
+              (if res
+                  (lp (map1 cdr l) (cons res rl))
+                  (lp (map1 cdr l) rl)))))))
 
 (define (pair-for-each f clist1 . rest)
   (if (null? rest)

@@ -30,24 +30,21 @@
   #:use-module ((system vm inspect) #:select ((inspect . %inspect)))
   #:use-module (system vm program)
   #:export (<debug>
-            make-debug debug? debug-frames debug-index debug-error-message
+            make-debug debug?
+            debug-frames debug-index debug-error-message debug-for-trap?
             print-registers print-locals print-frame print-frames frame->module
-            stack->vector narrow-stack->vector))
+            stack->vector narrow-stack->vector
+            frame->stack-vector))
 
 ;; TODO:
 ;;
 ;; eval expression in context of frame
 ;; set local variable in frame
-;; step until next instruction
-;; step until next function call/return
-;; step until return from frame
-;; step until different source line
 ;; step until greater source line
 ;; watch expression
 ;; set printing width
 ;; disassemble the current function
 ;; inspect any object
-;; (state associated with vm ?)
 
 ;;;
 ;;; Debugger
@@ -57,7 +54,7 @@
 ;;; accessors, and provides some helper functions.
 ;;;
 
-(define-record <debug> frames index error-message)
+(define-record <debug> frames index error-message for-trap?)
 
 
 
@@ -102,12 +99,13 @@
        (frame-bindings frame))))))
 
 (define* (print-frame frame #:optional (port (current-output-port))
-                      #:key index (width 72) (full? #f) (last-source #f))
+                      #:key index (width 72) (full? #f) (last-source #f)
+                      next-source?)
   (define (source:pretty-file source)
     (if source
         (or (source:file source) "current input")
         "unknown file"))
-  (let* ((source (frame-source frame))
+  (let* ((source ((if next-source? frame-next-source frame-source) frame))
          (file (source:pretty-file source))
          (line (and=> source source:line-for-user))
          (col (and=> source source:column)))
@@ -122,7 +120,8 @@
 
 (define* (print-frames frames
                        #:optional (port (current-output-port))
-                       #:key (width 72) (full? #f) (forward? #f) count)
+                       #:key (width 72) (full? #f) (forward? #f) count
+                       for-trap?)
   (let* ((len (vector-length frames))
          (lower-idx (if (or (not count) (positive? count))
                         0
@@ -136,8 +135,12 @@
       (if (<= lower-idx i upper-idx)
           (let* ((frame (vector-ref frames i)))
             (print-frame frame port #:index i #:width width #:full? full?
-                         #:last-source last-source)
-            (lp (+ i inc) (frame-source frame)))))))
+                         #:last-source last-source
+                         #:next-source? (and (zero? i) for-trap?))
+            (lp (+ i inc)
+                (if (and (zero? i) for-trap?)
+                    (frame-next-source frame)
+                    (frame-source frame))))))))
 
 ;; Ideally here we would have something much more syntactic, in that a set! to a
 ;; local var that is not settable would raise an error, and export etc forms
@@ -181,6 +184,21 @@
         (stack->vector narrowed)
         #()))) ; ? Can be the case for a tail-call to `throw' tho
 
+(define (frame->stack-vector frame)
+  (let ((tag (and (pair? (fluid-ref %stacks))
+                  (cdar (fluid-ref %stacks)))))
+    (narrow-stack->vector
+     (make-stack frame)
+     ;; Take the stack from the given frame, cutting 0
+     ;; frames.
+     0
+     ;; Narrow the end of the stack to the most recent
+     ;; start-stack.
+     tag
+     ;; And one more frame, because %start-stack
+     ;; invoking the start-stack thunk has its own frame
+     ;; too.
+     0 (and tag 1))))
 
 ;; (define (debug)
 ;;   (run-debugger

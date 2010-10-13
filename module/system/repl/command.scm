@@ -29,9 +29,9 @@
   #:use-module (system vm program)
   #:use-module (system vm trap-state)
   #:use-module (system vm vm)
+  #:use-module ((system vm frame) #:select (frame-return-values))
   #:autoload (system base language) (lookup-language language-reader)
-  #:autoload (system vm trace) (vm-trace)
-  #:autoload (system vm profile) (vm-profile)
+  #:autoload (system vm trace) (call-with-trace)
   #:use-module (ice-9 format)
   #:use-module (ice-9 session)
   #:use-module (ice-9 documentation)
@@ -49,7 +49,7 @@
 ;;;
 
 (define *command-table*
-  '((help     (help h) (show s) (apropos a) (describe d))
+  '((help     (help h) (show) (apropos a) (describe d))
     (module   (module m) (import use) (load l) (binding b))
     (language (language L))
     (compile  (compile c) (compile-file cc)
@@ -58,6 +58,9 @@
     (debug    (backtrace bt) (up) (down) (frame fr)
               (procedure proc) (locals) (error-message error)
               (break br bp) (break-at-source break-at bs)
+              (step s) (step-instruction si)
+              (next n) (next-instruction ni)
+              (finish)
               (tracepoint tp)
               (traps) (delete del) (disable) (enable)
               (registers regs))
@@ -447,8 +450,7 @@ Profile execution."
   "trace EXP
 Trace execution."
   ;; FIXME: doc options, or somehow deal with them better
-  (apply vm-trace
-         (the-vm)
+  (apply call-with-trace
          (repl-prepare-eval-thunk repl (repl-parse repl form))
          opts))
 
@@ -470,6 +472,8 @@ Trace execution."
                        (identifier-syntax (debug-frames debug)))
                       (#,(datum->syntax #'repl 'message)
                        (identifier-syntax (debug-error-message debug)))
+                      (#,(datum->syntax #'repl 'for-trap?)
+                       (identifier-syntax (debug-for-trap? debug)))
                       (#,(datum->syntax #'repl 'index)
                        (identifier-syntax
                         (id (debug-index debug))
@@ -491,7 +495,8 @@ If COUNT is negative, the last COUNT frames will be shown."
   (print-frames frames
                 #:count count
                 #:width width
-                #:full? full?))
+                #:full? full?
+                #:for-trap? for-trap?))
 
 (define-stack-command (up repl #:optional (count 1))
   "up [COUNT]
@@ -508,10 +513,12 @@ An argument says how many frames up to go."
       (format #t "Already at outermost frame.\n"))
      (else
       (set! index (1- (vector-length frames)))
-      (print-frame cur #:index index))))
+      (print-frame cur #:index index
+                   #:next-source? (and (zero? index) for-trap?)))))
    (else
     (set! index (+ count index))
-    (print-frame cur #:index index))))
+    (print-frame cur #:index index
+                 #:next-source? (and (zero? index) for-trap?)))))
 
 (define-stack-command (down repl #:optional (count 1))
   "down [COUNT]
@@ -528,10 +535,11 @@ An argument says how many frames down to go."
       (format #t "Already at innermost frame.\n"))
      (else
       (set! index 0)
-      (print-frame cur #:index index))))
+      (print-frame cur #:index index #:next-source? for-trap?))))
    (else
     (set! index (- index count))
-    (print-frame cur #:index index))))
+    (print-frame cur #:index index
+                 #:next-source? (and (zero? index) for-trap?)))))
 
 (define-stack-command (frame repl #:optional idx)
   "frame [IDX]
@@ -546,10 +554,12 @@ With an argument, select a frame by index, then show it."
       (format #t "Invalid argument to `frame': expected a non-negative integer for IDX.~%"))
      ((< idx (vector-length frames))
       (set! index idx)
-      (print-frame cur #:index index))
+      (print-frame cur #:index index
+                   #:next-source? (and (zero? index) for-trap?)))
      (else
       (format #t "No such frame.~%"))))
-   (else (print-frame cur #:index index))))
+   (else (print-frame cur #:index index
+                      #:next-source? (and (zero? index) for-trap?)))))
 
 (define-stack-command (procedure repl)
   "procedure
@@ -591,6 +601,95 @@ Note that the given source location must be inside a procedure."
   (let ((file (if (symbol? file) (symbol->string file) file)))
     (let ((idx (add-trap-at-source-location! file line)))
       (format #t "Trap ~a: ~a.~%" idx (trap-name idx)))))
+
+(define (repl-pop-continuation-resumer repl msg)
+  ;; Capture the dynamic environment with this prompt thing. The
+  ;; result is a procedure that takes a frame.
+  (% (call-with-values
+         (lambda ()
+           (abort
+            (lambda (k)
+              ;; Call frame->stack-vector before reinstating the
+              ;; continuation, so that we catch the %stacks fluid at
+              ;; the time of capture.
+              (lambda (frame)
+                (k frame
+                   (frame->stack-vector
+                    (frame-previous frame)))))))
+       (lambda (from stack)
+         (format #t "~a~%" msg)
+         (let ((vals (frame-return-values from)))
+           (if (null? vals)
+               (format #t "No return values.~%")
+               (begin
+                 (format #t "Return values:~%")
+                 (for-each (lambda (x) (repl-print repl x)) vals))))
+         ((module-ref (resolve-interface '(system repl repl)) 'start-repl)
+          #:debug (make-debug stack 0 msg #t))))))
+
+(define-stack-command (finish repl)
+  "finish
+Run until the current frame finishes.
+
+Resume execution, breaking when the current frame finishes."
+  (let ((handler (repl-pop-continuation-resumer
+                  repl (format #f "Return from ~a" cur))))
+    (add-ephemeral-trap-at-frame-finish! cur handler)
+    (throw 'quit)))
+
+(define (repl-next-resumer msg)
+  ;; Capture the dynamic environment with this prompt thing. The
+  ;; result is a procedure that takes a frame.
+  (% (let ((stack (abort
+                   (lambda (k)
+                     ;; Call frame->stack-vector before reinstating the
+                     ;; continuation, so that we catch the %stacks fluid
+                     ;; at the time of capture.
+                     (lambda (frame)
+                       (k (frame->stack-vector frame)))))))
+       (format #t "~a~%" msg)
+       ((module-ref (resolve-interface '(system repl repl)) 'start-repl)
+        #:debug (make-debug stack 0 msg #t)))))
+
+(define-stack-command (step repl)
+  "step
+Step until control reaches a different source location.
+
+Step until control reaches a different source location."
+  (let ((msg (format #f "Step into ~a" cur)))
+    (add-ephemeral-stepping-trap! cur (repl-next-resumer msg)
+                                  #:into? #t #:instruction? #f)
+    (throw 'quit)))
+
+(define-stack-command (step-instruction repl)
+  "step-instruction
+Step until control reaches a different instruction.
+
+Step until control reaches a different VM instruction."
+  (let ((msg (format #f "Step into ~a" cur)))
+    (add-ephemeral-stepping-trap! cur (repl-next-resumer msg)
+                                  #:into? #t #:instruction? #t)
+    (throw 'quit)))
+
+(define-stack-command (next repl)
+  "next
+Step until control reaches a different source location in the current frame.
+
+Step until control reaches a different source location in the current frame."
+  (let ((msg (format #f "Step into ~a" cur)))
+    (add-ephemeral-stepping-trap! cur (repl-next-resumer msg)
+                                  #:into? #f #:instruction? #f)
+    (throw 'quit)))
+
+(define-stack-command (next-instruction repl)
+  "next-instruction
+Step until control reaches a different instruction in the current frame.
+
+Step until control reaches a different VM instruction in the current frame."
+  (let ((msg (format #f "Step into ~a" cur)))
+    (add-ephemeral-stepping-trap! cur (repl-next-resumer msg)
+                                  #:into? #f #:instruction? #t)
+    (throw 'quit)))
 
 (define-meta-command (tracepoint repl (form))
   "tracepoint PROCEDURE
@@ -747,8 +846,8 @@ Display statistics."
     (set! (repl-gc-stats repl) this-gcs)))
 
 (define (display-stat title flag field1 field2 unit)
-  (let ((str (format #f "~~20~AA ~~10@A /~~10@A ~~A~~%" (if flag "" "@"))))
-    (format #t str title field1 field2 unit)))
+  (let ((fmt (format #f "~~20~AA ~~10@A /~~10@A ~~A~~%" (if flag "" "@"))))
+    (format #t fmt title field1 field2 unit)))
 
 (define (display-stat-title title field1 field2)
   (display-stat title #t field1 field2 ""))
