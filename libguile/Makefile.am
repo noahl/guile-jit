@@ -452,11 +452,13 @@ noinst_HEADERS = conv-integer.i.c conv-uinteger.i.c		\
 noinst_HEADERS += vm-engine.c vm-i-system.c vm-i-scheme.c vm-i-loader.c
 
 libguile_@GUILE_EFFECTIVE_VERSION@_la_DEPENDENCIES = @LIBLOBJS@
+
 libguile_@GUILE_EFFECTIVE_VERSION@_la_LIBADD =		\
   @LIBLOBJS@ $(gnulib_library) $(LTLIBGMP) $(LTLIBLTDL)	\
   $(LTLIBUNISTRING) $(LTLIBICONV) $(LTLIBINTL)
+
 libguile_@GUILE_EFFECTIVE_VERSION@_la_LDFLAGS =								\
-  @LTLIBINTL@ $(LIBFFI_LIBS) $(INET_NTOP_LIB) $(INET_PTON_LIB)						\
+  $(BDW_GC_LIBS) $(LIBFFI_LIBS) $(INET_NTOP_LIB) $(INET_PTON_LIB)					\
   $(GETADDRINFO_LIB) $(HOSTENT_LIB) $(SERVENT_LIB)							\
   -version-info @LIBGUILE_INTERFACE_CURRENT@:@LIBGUILE_INTERFACE_REVISION@:@LIBGUILE_INTERFACE_AGE@	\
   -export-dynamic -no-undefined										\
@@ -741,12 +743,12 @@ MKDEP = gcc -M -MG $(DEFS) $(AM_CPPFLAGS) $(CPPFLAGS) $(CFLAGS)
 
 # Write $(srcdir)/cpp-{E,SIG}.syms.NEW if there are any not-yet-seen
 # ("new" to us) E* or SIG* symbols in <errno.h> or <signal.h>, respectively.
-chknew-E chknew-SIG:
+chknew-E chknew-SIG:						\
 	@bit=`echo $@ | sed s/^chknew-//` ;			\
 	old="$(srcdir)/cpp-$$bit.syms" ;			\
 	echo "#include <$${bit}.h>"				\
 	 | sed 's/E/errno/;s/SIG/signal/'			\
-	 | gcc -undef -dM -E -					\
+	 | gcc -dM -E -						\
 	 | sed 's/^#define //;/^'$$bit'[A-Z][A-Z]*/!d;s/ .*//'	\
 	 | sort | diff -u $$old - | sed '1,2d;/^+/!d;s/^.//'	\
 	 > TMP ;						\

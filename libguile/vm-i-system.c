@@ -330,19 +330,20 @@ VM_DEFINE_INSTRUCTION (26, variable_bound, "variable-bound?", 0, 1, 1)
 VM_DEFINE_INSTRUCTION (27, toplevel_ref, "toplevel-ref", 1, 0, 1)
 {
   unsigned objnum = FETCH ();
-  SCM what;
+  SCM what, resolved;
   CHECK_OBJECT (objnum);
   what = OBJECT_REF (objnum);
 
-  if (!SCM_VARIABLEP (what)) 
+  if (!SCM_VARIABLEP (what))
     {
       SYNC_REGISTER ();
-      what = resolve_variable (what, scm_program_module (program));
-      if (!VARIABLE_BOUNDP (what))
+      resolved = resolve_variable (what, scm_program_module (program));
+      if (!VARIABLE_BOUNDP (resolved))
         {
           finish_args = scm_list_1 (what);
           goto vm_error_unbound;
         }
+      what = resolved;
       OBJECT_SET (objnum, what);
     }
 
@@ -352,22 +353,23 @@ VM_DEFINE_INSTRUCTION (27, toplevel_ref, "toplevel-ref", 1, 0, 1)
 
 VM_DEFINE_INSTRUCTION (28, long_toplevel_ref, "long-toplevel-ref", 2, 0, 1)
 {
-  SCM what;
+  SCM what, resolved;
   unsigned int objnum = FETCH ();
   objnum <<= 8;
   objnum += FETCH ();
   CHECK_OBJECT (objnum);
   what = OBJECT_REF (objnum);
 
-  if (!SCM_VARIABLEP (what)) 
+  if (!SCM_VARIABLEP (what))
     {
       SYNC_REGISTER ();
-      what = resolve_variable (what, scm_program_module (program));
-      if (!VARIABLE_BOUNDP (what))
+      resolved = resolve_variable (what, scm_program_module (program));
+      if (!VARIABLE_BOUNDP (resolved))
         {
           finish_args = scm_list_1 (what);
           goto vm_error_unbound;
         }
+      what = resolved;
       OBJECT_SET (objnum, what);
     }
 
@@ -1607,11 +1609,12 @@ VM_DEFINE_INSTRUCTION (89, wind_fluids, "wind-fluids", 1, -1, 0)
   unsigned n = FETCH ();
   SCM wf;
   
-  if (sp - 2*n < SCM_FRAME_UPPER_ADDRESS (fp))
-    goto vm_error_stack_underflow;
-
   SYNC_REGISTER ();
-  wf = scm_i_make_with_fluids (n, sp + 1 - 2*n, sp + 1 - n);
+  sp -= 2 * n;
+  CHECK_UNDERFLOW ();
+  wf = scm_i_make_with_fluids (n, sp + 1, sp + 1 + n);
+  NULLSTACK (2 * n);
+
   scm_i_swap_with_fluids (wf, dynstate);
   scm_i_set_dynwinds (scm_cons (wf, scm_i_dynwinds ()));
   NEXT;
