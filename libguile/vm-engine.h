@@ -31,6 +31,8 @@
    For GCC, I have hand-assigned hardware registers for several architectures.
 */
 
+#include "vm-jit.h"
+
 #ifdef __GNUC__
 #ifdef __mips__
 #define IP_REG asm("$16")
@@ -89,8 +91,6 @@
 #ifndef FP_REG
 #define FP_REG
 #endif
-
-#include "vm-jit.h"
 
 
 /*
